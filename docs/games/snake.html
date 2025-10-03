@@ -1,0 +1,40 @@
+<!doctype html><meta charset="utf-8"><title>Snake</title>
+<style>
+body{margin:0;background:#0e1320;color:#fff;font-family:system-ui}
+#wrap{display:flex;flex-direction:column;align-items:center;margin-top:10px}
+canvas{background:#101934;border-radius:10px}
+#bar{margin:8px}button{background:#2f376e;color:#fff;border:0;border-radius:6px;padding:6px 10px}
+</style>
+<div id="wrap">
+<div id="bar">Score: <span id="s">0</span> <button onclick="reset()">New</button></div>
+<canvas id="c" width="420" height="420"></canvas>
+</div>
+<script>
+const cs=20, n=21, ctx=c.getContext('2d'); let snake,dir,food,score,t;
+function rnd(n){return Math.floor(Math.random()*n)}
+function spawnFood(){food={x:rnd(n),y:rnd(n)}}
+function reset(){snake=[{x:10,y:10}],dir={x:1,y:0},score=0;spawnFood();clearInterval(t);t=setInterval(step,90)}
+function step(){
+const nx={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+if(nx.x<0||nx.y<0||nx.x>=n||nx.y>=n||snake.some(p=>p.x==nx.x&&p.y==nx.y)){reset();return}
+snake.unshift(nx);
+if(nx.x==food.x&&nx.y==food.y){score++;spawnFood()}else snake.pop();
+draw();
+}
+function draw(){
+ctx.fillStyle='#101934';ctx.fillRect(0,0,c.width,c.height);
+ctx.fillStyle='#77e28a';snake.forEach(p=>ctx.fillRect(p.x*cs,p.y*cs,cs-1,cs-1));
+ctx.fillStyle='#ff6b6b';ctx.fillRect(food.x*cs,food.y*cs,cs-1,cs-1);
+s.textContent=score;
+}
+addEventListener('keydown',e=>{
+const k=e.key.toLowerCase();
+if((k==='arrowup'||k==='w')&&dir.y!=1)dir={x:0,y:-1};
+if((k==='arrowdown'||k==='s')&&dir.y!=-1)dir={x:0,y:1};
+if((k==='arrowleft'||k==='a')&&dir.x!=1)dir={x:-1,y:0};
+if((k==='arrowright'||k==='d')&&dir.x!=-1)dir={x:1,y:0};
+});
+reset();
+</script>
+
+

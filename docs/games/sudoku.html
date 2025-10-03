@@ -1,0 +1,45 @@
+<!doctype html><meta charset="utf-8"><title>Sudoku</title>
+<style>
+body{margin:0;background:#0f1324;color:#fff;font-family:system-ui;text-align:center}
+#b{display:grid;grid-template-columns:repeat(9,36px);gap:4px;justify-content:center;margin:12px}
+input{width:36px;height:36px;text-align:center;border-radius:6px;border:0;background:#24306a;color:#fff;font-weight:700}
+.fixed{background:#3a478d} button{background:#2f376e;color:#fff;border:0;border-radius:6px;padding:6px 10px;margin:6px}
+</style>
+<h3>Sudoku</h3>
+<div id="b"></div>
+<div><button onclick="newGame()">New</button><button onclick="check()">Check</button></div>
+<script>
+const cells=[];let solution=[];
+function fillBoard(){
+// very small backtracking generator
+const grid=Array(81).fill(0), rows=[...Array(9)].map(_=>Array(10).fill(0)),
+cols=[...Array(9)].map(_=>Array(10).fill(0)), box=[...Array(9)].map(_=>Array(10).fill(0));
+function place(i){
+if(i==81)return true; const r=i/9|0,c=i%9,b=(r/3|0)*3+(c/3|0);
+const nums=[1,2,3,4,5,6,7,8,9].sort(_=>Math.random()-0.5);
+for(const n of nums){if(!rows[r][n]&&!cols[c][n]&&!box[b][n]){
+rows[r][n]=cols[c][n]=box[b][n]=1;grid[i]=n;if(place(i+1))return true;rows[r][n]=cols[c][n]=box[b][n]=0}
+}
+grid[i]=0;return false;
+}
+place(0);return grid;
+}
+function newGame(){
+const g=document.getElementById('b');g.innerHTML='';cells.length=0;
+solution=fillBoard(); // remove ~50 cells
+const puzzle=solution.slice();let holes=50;while(holes){let i=Math.random()*81|0;if(puzzle[i]){puzzle[i]=0;holes--}}
+for(let i=0;i<81;i++){
+const el=document.createElement('input');el.maxLength=1;el.value=puzzle[i]||'';
+if(puzzle[i]){el.readOnly=true;el.className='fixed'}
+el.oninput=()=>{el.value=el.value.replace(/[^1-9]/g,'')}
+cells.push(el);document.getElementById('b').appendChild(el);
+}
+}
+function check(){
+for(let i=0;i<81;i++){
+const v=+cells[i].value||0;if(v!==solution[i]){alert('Not solved yet.');return}
+}
+alert('Solved!');
+}
+newGame();
+</script>

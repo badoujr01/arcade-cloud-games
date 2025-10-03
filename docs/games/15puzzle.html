@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>15 Puzzle</title>
+<style>
+:root{--gap:10px;--tile:80px;}
+*{box-sizing:border-box;font-family:system-ui,Segoe UI,Roboto,Arial}
+body{margin:0;display:grid;place-items:center;min-height:100vh;background:#0b1e5b;color:#fff}
+.board{display:grid;grid-template-columns:repeat(4,var(--tile));grid-template-rows:repeat(4,var(--tile));gap:var(--gap);background:#123; padding:var(--gap);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+button.tile{font-weight:700;font-size:26px;border:0;border-radius:12px;background:#1e88e5;color:#fff;cursor:pointer;display:grid;place-items:center;transition:.12s}
+button.tile:hover{transform:translateY(-1px)}
+.empty{background:#0f274f;cursor:default}
+.hud{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:10px;justify-content:center}
+.hud button{padding:8px 14px;border-radius:10px;border:0;background:#2dd4bf;color:#072; font-weight:700;cursor:pointer}
+.win{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.6)}
+.win.active{display:grid}
+.card{background:#fff;color:#111;padding:22px 26px;border-radius:14px; text-align:center}
+</style>
+</head>
+<body>
+<div class="hud">
+<button id="shuffle">Shuffle</button>
+<button id="solve">Solve</button>
+<span id="moves" style="padding:8px 12px;background:#0f274f;border-radius:10px;color:#9fd;">Moves: 0</span>
+</div>
+<div id="board" class="board" aria-label="15 puzzle board"></div>
+
+<div id="win" class="win"><div class="card">
+<h2>✅ Nice! You solved it.</h2>
+<button onclick="start(true)">Play again</button>
+</div></div>
+
+<script>
+const boardEl = document.getElementById('board');
+const movesEl = document.getElementById('moves');
+const winEl = document.getElementById('win');
+
+let tiles = [...Array(15).keys()].map(n => n+1).concat(0); // 0 = empty
+let moves = 0;
+
+function render(){
+boardEl.innerHTML='';
+tiles.forEach(v=>{
+const btn=document.createElement('button');
+btn.className='tile'+(v?'' :' empty');
+btn.textContent=v? v : '';
+btn.disabled = !v;
+btn.onclick = ()=>tryMove(v);
+boardEl.appendChild(btn);
+});
+movesEl.textContent = `Moves: ${moves}`;
+}
+
+function coords(idx){ return [Math.floor(idx/4), idx%4]; }
+
+function canSwap(i,j){
+const [r1,c1]=coords(i), [r2,c2]=coords(j);
+return (r1===r2 && Math.abs(c1-c2)===1) || (c1===c2 && Math.abs(r1-r2)===1);
+}
+
+function tryMove(val){
+const i = tiles.indexOf(val);
+const z = tiles.indexOf(0);
+if (!canSwap(i,z)) return;
+[tiles[i], tiles[z]] = [tiles[z], tiles[i]];
+moves++;
+render();
+if (isSolved()) winEl.classList.add('active');
+}
+
+function isSolved(){
+for(let i=0;i<15;i++) if(tiles[i]!==i+1) return false;
+return tiles[15]===0;
+}
+
+// Fisher–Yates until solvable
+function shuffle(){
+do{
+for(let i=tiles.length-1;i>0;i--){
+const j=Math.floor(Math.random()* (i+1));
+[tiles[i],tiles[j]]=[tiles[j],tiles[i]];
+}
+}while(!solvable(tiles) || isSolved());
+}
+
+function solvable(a){
+let inv=0;
+for(let i=0;i<16;i++) for(let j=i+1;j<16;j++)
+if(a[i]&&a[j]&&a[i]>a[j]) inv++;
+const rowFromBottom = 4 - Math.floor(a.indexOf(0)/4); // 1..4
+return (rowFromBottom%2===0) ? (inv%2===1) : (inv%2===0);
+}
+
+function start(shuf=false){
+tiles=[...Array(15).keys()].map(n=>n+1).concat(0);
+moves=0; winEl.classList.remove('active');
+if(shuf) shuffle();
+render();
+}
+
+document.getElementById('shuffle').onclick = ()=>start(true);
+document.getElementById('solve').onclick = ()=>start(false);
+
+start(true);
+</script>
+</body>
+</html>
