@@ -5,105 +5,103 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>15 Puzzle</title>
 <style>
-:root{--gap:10px;--tile:80px;}
-*{box-sizing:border-box;font-family:system-ui,Segoe UI,Roboto,Arial}
-body{margin:0;display:grid;place-items:center;min-height:100vh;background:#0b1e5b;color:#fff}
-.board{display:grid;grid-template-columns:repeat(4,var(--tile));grid-template-rows:repeat(4,var(--tile));gap:var(--gap);background:#123; padding:var(--gap);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
-button.tile{font-weight:700;font-size:26px;border:0;border-radius:12px;background:#1e88e5;color:#fff;cursor:pointer;display:grid;place-items:center;transition:.12s}
-button.tile:hover{transform:translateY(-1px)}
-.empty{background:#0f274f;cursor:default}
-.hud{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:10px;justify-content:center}
-.hud button{padding:8px 14px;border-radius:10px;border:0;background:#2dd4bf;color:#072; font-weight:700;cursor:pointer}
-.win{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.6)}
-.win.active{display:grid}
-.card{background:#fff;color:#111;padding:22px 26px;border-radius:14px; text-align:center}
+:root{--bg:#0b2a5a;--card:#0e3780;--tile:#1c57c7;--tile2:#1749a6;--text:#fff;}
+html,body{height:100%;margin:0;background:linear-gradient(135deg,var(--bg),#062246);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);}
+.wrap{max-width:420px;margin:40px auto;padding:16px}
+h1{font-size:20px;margin:0 0 12px}
+.bar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+button{background:var(--tile);border:none;color:#fff;padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+button:hover{filter:brightness(1.1)}
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:var(--card);padding:8px;border-radius:14px;box-shadow:0 8px 30px #0005}
+.cell{aspect-ratio:1/1;background:var(--tile);display:grid;place-items:center;border-radius:12px;font-size:26px;font-weight:800;user-select:none;transition:transform .08s}
+.cell:nth-child(odd){background:var(--tile2)}
+.empty{background:transparent;box-shadow:inset 0 0 0 2px #ffffff22}
+.meta{opacity:.8;margin-top:10px;font-size:13px}
 </style>
 </head>
 <body>
-<div class="hud">
-<button id="shuffle">Shuffle</button>
-<button id="solve">Solve</button>
-<span id="moves" style="padding:8px 12px;background:#0f274f;border-radius:10px;color:#9fd;">Moves: 0</span>
+<div class="wrap">
+<h1>15 Puzzle</h1>
+<div class="bar">
+<button id="shuffleBtn">Shuffle</button>
+<button id="solveBtn">Solve</button>
+<div class="meta" id="moves">Moves: 0</div>
 </div>
-<div id="board" class="board" aria-label="15 puzzle board"></div>
-
-<div id="win" class="win"><div class="card">
-<h2>✅ Nice! You solved it.</h2>
-<button onclick="start(true)">Play again</button>
-</div></div>
+<div class="board" id="board"></div>
+<div class="meta">Tip: click a tile next to the empty square to slide it.</div>
+</div>
 
 <script>
 const boardEl = document.getElementById('board');
 const movesEl = document.getElementById('moves');
-const winEl = document.getElementById('win');
+const N = 4;
+let tiles = [], moves = 0;
 
-let tiles = [...Array(15).keys()].map(n => n+1).concat(0); // 0 = empty
-let moves = 0;
-
+function makeSolved(){
+tiles = Array.from({length:16},(_,i)=> i===15 ? 0 : i+1);
+}
 function render(){
-boardEl.innerHTML='';
-tiles.forEach(v=>{
-const btn=document.createElement('button');
-btn.className='tile'+(v?'' :' empty');
-btn.textContent=v? v : '';
-btn.disabled = !v;
-btn.onclick = ()=>tryMove(v);
-boardEl.appendChild(btn);
+boardEl.innerHTML = '';
+tiles.forEach((v,idx)=>{
+const div = document.createElement('div');
+div.className = 'cell' + (v===0?' empty':'');
+if(v!==0) div.textContent = v;
+div.onclick = ()=> tryMove(idx);
+boardEl.appendChild(div);
 });
 movesEl.textContent = `Moves: ${moves}`;
 }
-
-function coords(idx){ return [Math.floor(idx/4), idx%4]; }
-
-function canSwap(i,j){
-const [r1,c1]=coords(i), [r2,c2]=coords(j);
-return (r1===r2 && Math.abs(c1-c2)===1) || (c1===c2 && Math.abs(r1-r2)===1);
+function pos(i){ return {r: (i/ N)|0, c: i%N}; }
+function neighbors(i){
+const {r,c}=pos(i);
+const list=[];
+if(r>0) list.push((r-1)*N+c);
+if(r<N-1) list.push((r+1)*N+c);
+if(c>0) list.push(r*N+c-1);
+if(c<N-1) list.push(r*N+c+1);
+return list;
 }
-
-function tryMove(val){
-const i = tiles.indexOf(val);
-const z = tiles.indexOf(0);
-if (!canSwap(i,z)) return;
-[tiles[i], tiles[z]] = [tiles[z], tiles[i]];
+function tryMove(i){
+const empty = tiles.indexOf(0);
+if(neighbors(i).includes(empty)){
+[tiles[i], tiles[empty]] = [tiles[empty], tiles[i]];
 moves++;
 render();
-if (isSolved()) winEl.classList.add('active');
+if(isSolved()) alert('🎉 Solved in '+moves+' moves!');
 }
-
+}
 function isSolved(){
 for(let i=0;i<15;i++) if(tiles[i]!==i+1) return false;
 return tiles[15]===0;
 }
-
-// Fisher–Yates until solvable
+// Fisher–Yates shuffle until solvable
 function shuffle(){
+moves=0;
 do{
 for(let i=tiles.length-1;i>0;i--){
-const j=Math.floor(Math.random()* (i+1));
+const j = Math.floor(Math.random()*(i+1));
 [tiles[i],tiles[j]]=[tiles[j],tiles[i]];
 }
-}while(!solvable(tiles) || isSolved());
-}
-
-function solvable(a){
-let inv=0;
-for(let i=0;i<16;i++) for(let j=i+1;j<16;j++)
-if(a[i]&&a[j]&&a[i]>a[j]) inv++;
-const rowFromBottom = 4 - Math.floor(a.indexOf(0)/4); // 1..4
-return (rowFromBottom%2===0) ? (inv%2===1) : (inv%2===0);
-}
-
-function start(shuf=false){
-tiles=[...Array(15).keys()].map(n=>n+1).concat(0);
-moves=0; winEl.classList.remove('active');
-if(shuf) shuffle();
+} while(!isSolvable(tiles));
 render();
 }
+function inversions(arr){
+const a = arr.filter(x=>x!==0);
+let inv=0;
+for(let i=0;i<a.length;i++) for(let j=i+1;j<a.length;j++) if(a[i]>a[j]) inv++;
+return inv;
+}
+function isSolvable(arr){
+const inv = inversions(arr);
+const rowFromBottom = N - pos(arr.indexOf(0)).r;
+// For 4x4: even grid -> blank on even row from bottom when inversions odd, or odd row when inversions even
+return (rowFromBottom%2===0) ? (inv%2===1) : (inv%2===0);
+}
+document.getElementById('shuffleBtn').onclick = shuffle;
+document.getElementById('solveBtn').onclick = ()=>{ makeSolved(); moves=0; render(); };
 
-document.getElementById('shuffle').onclick = ()=>start(true);
-document.getElementById('solve').onclick = ()=>start(false);
-
-start(true);
+makeSolved(); shuffle(); // start shuffled
 </script>
 </body>
 </html>
+

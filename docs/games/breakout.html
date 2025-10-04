@@ -5,98 +5,97 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Breakout</title>
 <style>
-body{margin:0;display:grid;place-items:center;min-height:100vh;background:#0b1e5b;color:#fff;font-family:system-ui}
-canvas{background:#0f274f;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
-.hud{position:fixed;top:12px;left:12px;right:12px;text-align:center}
+html,body{height:100%;margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1c56c7,#0a2455);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:#fff}
+.wrap{max-width:720px;margin:28px auto;padding:12px}
+.bar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+button{background:#1f6cff;border:none;color:#fff;padding:9px 12px;border-radius:10px;font-weight:700;cursor:pointer}
+canvas{display:block;background:#061a3a;border-radius:14px;box-shadow:0 8px 30px #0007;width:100%;height:auto}
+.meta{opacity:.85;margin-top:8px}
 </style>
 </head>
 <body>
-<div class="hud">← → to move • Space to start/pause</div>
-<canvas id="c" width="420" height="560"></canvas>
+<div class="wrap">
+<div class="bar">
+<button id="restart">Restart</button>
+<div class="meta" id="info">Score: 0 &nbsp; Lives: 3</div>
+</div>
+<canvas id="c" width="640" height="420"></canvas>
+<div class="meta">Move with mouse or ← → keys.</div>
+</div>
 <script>
-const cv = document.getElementById('c'), ct = cv.getContext('2d');
-const W=cv.width,H=cv.height;
+const c = document.getElementById('c');
+const g = c.getContext('2d');
+const info = document.getElementById('info');
+let W=c.width, H=c.height;
 
-let right=false,left=false, running=false;
-let score=0, lives=3;
+const paddle = {w:90,h:14,x:(W-90)/2,y:H-26,dx:0,speed:6};
+let ball, bricks, score, lives, running, left=false, right=false;
 
-const paddle={w:90,h:12,x:(W-90)/2,y:H-20,s:6};
-const ball={r:7,x:W/2,y:H-40,dx:3,dy:-3};
-
-const rows=5, cols=7, bw=52, bh=18, pad=8, offTop=70, offLeft=(W-(cols*bw+(cols-1)*pad))/2;
-const bricks=[...Array(cols)].map((_,c)=>[...Array(rows)].map((_,r)=>({x:offLeft+c*(bw+pad),y:offTop+r*(bh+pad),alive:true})));
-
+function makeBricks(){
+const rows=5, cols=10, pad=6, offX=20, offY=50, bw=(W-offX*2 - pad*(cols-1))/cols, bh=18;
+const b=[];
+for(let r=0;r<rows;r++){
+for(let c2=0;c2<cols;c2++){
+b.push({x: offX+c2*(bw+pad), y: offY+r*(bh+pad), w:bw, h:bh, alive:true, color:`hsl(${210+r*18},80%,60%)`});
+}
+}
+return b;
+}
+function resetBall(){
+ball = {x:W/2,y:H-60,r:8,dx:3*(Math.random()<.5?-1:1),dy:-4};
+}
+function restart(){
+score=0; lives=3; bricks=makeBricks(); resetBall(); running=true;
+}
 function draw(){
-ct.clearRect(0,0,W,H);
-// bricks
-bricks.forEach(col=>col.forEach(b=>{
-if(!b.alive) return;
-ct.fillStyle='#1e88e5'; ct.fillRect(b.x,b.y,bw,bh); ct.fillStyle='#0003';
-ct.fillRect(b.x,b.y+bh-4,bw,4);
-}));
+g.clearRect(0,0,W,H);
 // paddle
-ct.fillStyle='#2dd4bf'; ct.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
+g.fillStyle='#2f88ff'; g.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
 // ball
-ct.beginPath(); ct.arc(ball.x,ball.y,ball.r,0,Math.PI*2); ct.fillStyle='#ffd166'; ct.fill();
-// score/lives
-ct.fillStyle='#fff'; ct.font='14px system-ui';
-ct.fillText('Score: '+score, 12, 18);
-ct.fillText('Lives: '+lives, W-72, 18);
+g.beginPath(); g.fillStyle='#fff'; g.arc(ball.x,ball.y,ball.r,0,Math.PI*2); g.fill();
+// bricks
+bricks.forEach(b=>{ if(!b.alive) return; g.fillStyle=b.color; g.fillRect(b.x,b.y,b.w,b.h); });
 }
-
-function update(){
-if(!running) return draw();
-// paddle move
-if(right && paddle.x+paddle.w<W) paddle.x+=paddle.s;
-if(left && paddle.x>0) paddle.x-=paddle.s;
-
-// ball move
+function step(){
+if(!running) return;
+// move paddle
+if(left) paddle.x-=paddle.speed;
+if(right) paddle.x+=paddle.speed;
+paddle.x=Math.max(0,Math.min(W-paddle.w,paddle.x));
+// move ball
 ball.x+=ball.dx; ball.y+=ball.dy;
-
 // walls
-if(ball.x+ball.r>W||ball.x-ball.r<0) ball.dx*=-1;
-if(ball.y-ball.r<40) ball.dy*=-1;
-
+if(ball.x<ball.r||ball.x>W-ball.r) ball.dx*=-1;
+if(ball.y<ball.r) ball.dy*=-1;
 // paddle collision
-if(ball.y+ball.r>=paddle.y && ball.x>paddle.x && ball.x<paddle.x+paddle.w && ball.dy>0){
+if(ball.y+ball.r>paddle.y && ball.x>paddle.x && ball.x<paddle.x+paddle.w && ball.dy>0){
 const hit=(ball.x-(paddle.x+paddle.w/2))/(paddle.w/2);
-ball.dx = 4*hit; ball.dy = -Math.abs(ball.dy);
+ball.dx = hit*5; ball.dy = -Math.abs(ball.dy);
 }
-
-// bottom
-if(ball.y+ball.r>H){
-lives--; running=false; resetBall();
-if(lives===0){ alert('Game over! Score '+score); resetAll(); }
-}
-
 // bricks collision
-bricks.forEach(col=>col.forEach(b=>{
+bricks.forEach(b=>{
 if(!b.alive) return;
-if(ball.x>b.x && ball.x<b.x+bw && ball.y> b.y && ball.y < b.y+bh){
-b.alive=false; ball.dy*=-1; score+=10;
-if(bricks.flat().every(x=>!x.alive)){ alert('You win! Score '+score); resetAll(); }
+if(ball.x> b.x && ball.x< b.x+b.w && ball.y> b.y && ball.y< b.y+b.h){
+b.alive=false; score+=10; ball.dy*=-1;
 }
-}));
-draw();
-requestAnimationFrame(update);
-}
-
-function resetBall(){ ball.x=W/2; ball.y=H-40; ball.dx=3*(Math.random()>.5?1:-1); ball.dy=-3; }
-function resetAll(){
-score=0; lives=3; bricks.forEach(c=>c.forEach(b=>b.alive=true)); paddle.x=(W-paddle.w)/2; resetBall(); draw();
-}
-
-document.addEventListener('keydown',e=>{
-if(e.key==='ArrowRight') right=true;
-if(e.key==='ArrowLeft') left=true;
-if(e.code==='Space'){ running=!running; if(running) requestAnimationFrame(update); }
 });
-document.addEventListener('keyup',e=>{
-if(e.key==='ArrowRight') right=false;
-if(e.key==='ArrowLeft') left=false;
+// lose life
+if(ball.y>H+20){
+lives--; if(lives<=0){ running=false; alert('Game over! Score: '+score); }
+else resetBall();
+}
+info.textContent=`Score: ${score} Lives: ${lives}`;
+draw(); requestAnimationFrame(step);
+}
+document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft') left=true; if(e.key==='ArrowRight') right=true; });
+document.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft') left=false; if(e.key==='ArrowRight') right=false; });
+c.addEventListener('mousemove',e=>{
+const rect=c.getBoundingClientRect();
+const mx=e.clientX-rect.left; paddle.x = mx - paddle.w/2;
 });
-
-resetAll(); // initial draw
+document.getElementById('restart').onclick=()=>{restart();};
+restart(); draw(); requestAnimationFrame(step);
 </script>
 </body>
 </html>
+
