@@ -1,3 +1,99 @@
-<!doctype html><meta charset="utf-8">
-<meta http-equiv="refresh" content="0;url=https://hextris.github.io/hextris/">
-<script>location.replace("https://hextris.github.io/hextris/");</script>
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hextris (Tetris-style)</title>
+<style>
+:root{--bg:#0b2258;--card:#123b9a;--fg:#fff}
+body{margin:0;background:linear-gradient(180deg,#0b2258,#0a1b46);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Arial}
+header,footer{display:flex;gap:8px;align-items:center;justify-content:center;padding:10px}
+.btn{background:#1c56ff;border:none;color:#fff;padding:8px 12px;border-radius:8px;font-weight:600}
+.hud{display:flex;gap:16px;justify-content:center}
+#root{display:grid;place-items:center;padding:10px}
+canvas{background:#0e2a72;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.pad{position:fixed;inset:auto 0 8px 0;display:flex;justify-content:center;gap:8px}
+.pad .btn{padding:12px 16px}
+</style>
+<body>
+<header class="hud">
+<button class="btn" id="start">Start</button>
+<button class="btn" id="pause">Pause</button>
+<button class="btn" id="restart">Restart</button>
+<span>Score: <b id="score">0</b></span>
+<span>Level: <b id="lvl">1</b></span>
+</header>
+<div id="root"><canvas id="cv" width="240" height="480"></canvas></div>
+<div class="pad">
+<button class="btn" id="left">◀</button>
+<button class="btn" id="rot">⟳</button>
+<button class="btn" id="right">▶</button>
+<button class="btn" id="down">▼</button>
+</div>
+<script>
+/* Tiny Tetris */
+const W=10,H=20,S=24, cv=document.getElementById('cv'), g=cv.getContext('2d');
+cv.width=W*S; cv.height=H*S;
+const COLORS=['#8be9fd','#50fa7b','#ffb86c','#bd93f9','#ff79c6','#f1fa8c','#ff5555'];
+
+const SHAPES=[
+[[1,1,1,1]], [[1,1],[1,1]], [[0,1,0],[1,1,1]],
+[[1,0,0],[1,1,1]], [[0,0,1],[1,1,1]],
+[[1,1,0],[0,1,1]], [[0,1,1],[1,1,0]]
+];
+
+let grid,cur,x,y,score=0,level=1,t=0,paused=true,over=false,dropI=0;
+
+function empty(){grid=[...Array(H)].map(_=>Array(W).fill(0))}
+function rot(m){return m[0].map((_,i)=>m.map(r=>r[i]).reverse())}
+function collide(nx=x,ny=y,nc=cur){
+for(let r=0;r<nc.length;r++)for(let c=0;c<nc[0].length;c++){
+if(!nc[r][c])continue; let X=nx+c,Y=ny+r;
+if(X<0||X>=W||Y>=H|| (Y>=0&&grid[Y][X])) return true;
+} return false;
+}
+function merge(){for(let r=0;r<cur.length;r++)for(let c=0;c<cur[0].length;c++)
+if(cur[r][c]&&y+r>=0)grid[y+r][x+c]=cur[r][c];}
+function piece(){const i=Math.random()*SHAPES.length|0;
+cur=SHAPES[i].map(r=>r.map(v=>v?i+1:0)); x=W/2- (cur[0].length/2|0); y=-2;
+if(collide()) {over=true; paused=true;}
+}
+function lineClear(){
+let k=0;
+for(let r=H-1;r>=0;r--){
+if(grid[r].every(v=>v)){grid.splice(r,1);grid.unshift(Array(W).fill(0));k++;r++}
+}
+if(k){score+= [0,40,100,300,1200][k]*(level); if(score>level*500){level++;}}
+}
+function draw(){
+g.clearRect(0,0,cv.width,cv.height);
+function cell(X,Y,v){g.fillStyle=v?COLORS[v-1]:'#0e2a72'; g.fillRect(X*S,Y*S,S-1,S-1)}
+for(let r=0;r<H;r++)for(let c=0;c<W;c++) if(grid[r][c])cell(c,r,grid[r][c]);
+if(!over) for(let r=0;r<cur.length;r++)for(let c=0;c<cur[0].length;c++)
+if(cur[r][c]&&y+r>=0)cell(x+c,y+r,cur[r][c]);
+document.getElementById('score').textContent=score;
+document.getElementById('lvl').textContent=level;
+}
+function step(ts){
+if(paused||over){draw(); return requestAnimationFrame(step)}
+if(ts-dropI>Math.max(60,600-50*level)){
+dropI=ts; if(!collide(x,y+1)){y++;} else {merge(); lineClear(); piece();}
+}
+draw(); requestAnimationFrame(step);
+}
+function left(){ if(!collide(x-1))x-- }
+function right(){ if(!collide(x+1))x++ }
+function down(){ if(!collide(x,y+1))y++ }
+function rotate(){ const r=rot(cur); if(!collide(x,y,r))cur=r }
+document.getElementById('left').onclick=left;
+document.getElementById('right').onclick=right;
+document.getElementById('down').onclick=down;
+document.getElementById('rot').onclick=rotate;
+addEventListener('keydown',e=>{
+if(e.key==='ArrowLeft')left();
+else if(e.key==='ArrowRight')right();
+else if(e.key==='ArrowDown')down();
+else if(e.key==='ArrowUp' || e.key===' ')rotate();
+});
+document.getElementById('start').onclick=()=>{paused=false};
+document.getElementById('pause').onclick=()=>{paused=!paused};
+document.getElementById('restart').onclick=()=>{score=0;level=1;over=false;paused=false;empty();piece()};
+empty();piece();requestAnimationFrame(step);
+</script></body></html>

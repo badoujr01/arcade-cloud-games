@@ -1,101 +1,61 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Breakout</title>
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Breakout</title>
 <style>
-html,body{height:100%;margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1c56c7,#0a2455);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:#fff}
-.wrap{max-width:720px;margin:28px auto;padding:12px}
-.bar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
-button{background:#1f6cff;border:none;color:#fff;padding:9px 12px;border-radius:10px;font-weight:700;cursor:pointer}
-canvas{display:block;background:#061a3a;border-radius:14px;box-shadow:0 8px 30px #0007;width:100%;height:auto}
-.meta{opacity:.85;margin-top:8px}
+body{margin:0;background:#0b2258;color:#fff;font-family:system-ui}
+header{display:flex;gap:8px;justify-content:center;align-items:center;padding:10px;flex-wrap:wrap}
+.btn{background:#1c56ff;border:none;color:#fff;padding:8px 12px;border-radius:8px;font-weight:600}
+select{background:#102b6b;color:#fff;border:1px solid #2a4ea6;border-radius:8px;padding:8px}
+#root{display:grid;place-items:center} canvas{background:#0e2a72;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 </style>
-</head>
-<body>
-<div class="wrap">
-<div class="bar">
-<button id="restart">Restart</button>
-<div class="meta" id="info">Score: 0 &nbsp; Lives: 3</div>
-</div>
-<canvas id="c" width="640" height="420"></canvas>
-<div class="meta">Move with mouse or ← → keys.</div>
-</div>
+<body><header>
+<label>Rows:
+<select id="rows"><option>4</option><option selected>5</option><option>6</option><option>7</option></select>
+</label>
+<label>Speed:
+<select id="speed"><option value="2.5">Easy</option><option value="3.2" selected>Normal</option><option value="4">Hard</option></select>
+</label>
+<button class="btn" id="start">Start</button>
+<button class="btn" id="pause">Pause</button>
+<button class="btn" id="restart">Restart</button>
+<div>Score: <b id="s">0</b></div>
+</header>
+<div id="root"><canvas id="cv" width="360" height="480"></canvas></div>
 <script>
-const c = document.getElementById('c');
-const g = c.getContext('2d');
-const info = document.getElementById('info');
-let W=c.width, H=c.height;
-
-const paddle = {w:90,h:14,x:(W-90)/2,y:H-26,dx:0,speed:6};
-let ball, bricks, score, lives, running, left=false, right=false;
-
-function makeBricks(){
-const rows=5, cols=10, pad=6, offX=20, offY=50, bw=(W-offX*2 - pad*(cols-1))/cols, bh=18;
-const b=[];
-for(let r=0;r<rows;r++){
-for(let c2=0;c2<cols;c2++){
-b.push({x: offX+c2*(bw+pad), y: offY+r*(bh+pad), w:bw, h:bh, alive:true, color:`hsl(${210+r*18},80%,60%)`});
-}
-}
-return b;
-}
-function resetBall(){
-ball = {x:W/2,y:H-60,r:8,dx:3*(Math.random()<.5?-1:1),dy:-4};
-}
-function restart(){
-score=0; lives=3; bricks=makeBricks(); resetBall(); running=true;
+const cv=document.getElementById('cv'), g=cv.getContext('2d');
+let paddleW=82,paddleH=12,paddleX=(cv.width-paddleW)/2,score=0,paused=true,over=false,br=[],bw=40,bh=16,off=26,gap=8,spd=3.2;
+let ball;
+function makeLevel(){
+const rows=+document.getElementById('rows').value; spd=+document.getElementById('speed').value;
+br=[]; for(let r=0;r<rows;r++)for(let c=0;c<8;c++) br.push({x:off+c*(bw+gap),y:off+r*(bh+gap),hit:false});
+ball={x:cv.width/2,y:cv.height-30,vx:spd,vy:-spd-0.8,r:6}; score=0; paused=true; over=false;
 }
 function draw(){
-g.clearRect(0,0,W,H);
-// paddle
-g.fillStyle='#2f88ff'; g.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
-// ball
-g.beginPath(); g.fillStyle='#fff'; g.arc(ball.x,ball.y,ball.r,0,Math.PI*2); g.fill();
-// bricks
-bricks.forEach(b=>{ if(!b.alive) return; g.fillStyle=b.color; g.fillRect(b.x,b.y,b.w,b.h); });
+g.clearRect(0,0,cv.width,cv.height);
+g.fillStyle='#50fa7b'; g.fillRect(paddleX,cv.height-20,paddleW,paddleH);
+g.fillStyle='#ff79c6'; g.beginPath(); g.arc(ball.x,ball.y,ball.r,0,Math.PI*2); g.fill();
+br.forEach(b=>{ if(!b.hit){ g.fillStyle='#bd93f9'; g.fillRect(b.x,b.y,bw,bh) }});
+document.getElementById('s').textContent=score;
 }
 function step(){
-if(!running) return;
-// move paddle
-if(left) paddle.x-=paddle.speed;
-if(right) paddle.x+=paddle.speed;
-paddle.x=Math.max(0,Math.min(W-paddle.w,paddle.x));
-// move ball
-ball.x+=ball.dx; ball.y+=ball.dy;
-// walls
-if(ball.x<ball.r||ball.x>W-ball.r) ball.dx*=-1;
-if(ball.y<ball.r) ball.dy*=-1;
-// paddle collision
-if(ball.y+ball.r>paddle.y && ball.x>paddle.x && ball.x<paddle.x+paddle.w && ball.dy>0){
-const hit=(ball.x-(paddle.x+paddle.w/2))/(paddle.w/2);
-ball.dx = hit*5; ball.dy = -Math.abs(ball.dy);
+if(!paused&&!over){
+ball.x+=ball.vx; ball.y+=ball.vy;
+if(ball.x<ball.r||ball.x>cv.width-ball.r)ball.vx*=-1;
+if(ball.y<ball.r)ball.vy*=-1;
+if(ball.y>cv.height-20 && ball.x>paddleX && ball.x<paddleX+paddleW) ball.vy*=-1;
+if(ball.y>cv.height+10){over=true; paused=true;}
+br.forEach(b=>{ if(!b.hit && ball.x>b.x && ball.x<b.x+bw && ball.y>b.y && ball.y<b.y+bh){ b.hit=true; ball.vy*=-1; score+=10 }})
+if(br.every(b=>b.hit)) { over=true; paused=true; }
 }
-// bricks collision
-bricks.forEach(b=>{
-if(!b.alive) return;
-if(ball.x> b.x && ball.x< b.x+b.w && ball.y> b.y && ball.y< b.y+b.h){
-b.alive=false; score+=10; ball.dy*=-1;
-}
-});
-// lose life
-if(ball.y>H+20){
-lives--; if(lives<=0){ running=false; alert('Game over! Score: '+score); }
-else resetBall();
-}
-info.textContent=`Score: ${score} Lives: ${lives}`;
 draw(); requestAnimationFrame(step);
 }
-document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft') left=true; if(e.key==='ArrowRight') right=true; });
-document.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft') left=false; if(e.key==='ArrowRight') right=false; });
-c.addEventListener('mousemove',e=>{
-const rect=c.getBoundingClientRect();
-const mx=e.clientX-rect.left; paddle.x = mx - paddle.w/2;
-});
-document.getElementById('restart').onclick=()=>{restart();};
-restart(); draw(); requestAnimationFrame(step);
-</script>
-</body>
-</html>
+cv.addEventListener('mousemove',e=>{ const r=cv.getBoundingClientRect(); paddleX=e.clientX-r.left-paddleW/2 });
+cv.addEventListener('touchmove',e=>{ const t=e.touches[0]; const r=cv.getBoundingClientRect(); paddleX=t.clientX-r.left-paddleW/2; e.preventDefault() },{passive:false});
+document.getElementById('start').onclick=()=>paused=false;
+document.getElementById('pause').onclick=()=>paused=!paused;
+document.getElementById('restart').onclick=()=>makeLevel();
+document.getElementById('rows').onchange=makeLevel; document.getElementById('speed').onchange=makeLevel;
+makeLevel(); requestAnimationFrame(step);
+</script></body></html>
+
+
 

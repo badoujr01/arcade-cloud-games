@@ -1,107 +1,45 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>15 Puzzle</title>
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>15 Puzzle</title>
 <style>
-:root{--bg:#0b2a5a;--card:#0e3780;--tile:#1c57c7;--tile2:#1749a6;--text:#fff;}
-html,body{height:100%;margin:0;background:linear-gradient(135deg,var(--bg),#062246);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);}
-.wrap{max-width:420px;margin:40px auto;padding:16px}
-h1{font-size:20px;margin:0 0 12px}
-.bar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
-button{background:var(--tile);border:none;color:#fff;padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600}
-button:hover{filter:brightness(1.1)}
-.board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:var(--card);padding:8px;border-radius:14px;box-shadow:0 8px 30px #0005}
-.cell{aspect-ratio:1/1;background:var(--tile);display:grid;place-items:center;border-radius:12px;font-size:26px;font-weight:800;user-select:none;transition:transform .08s}
-.cell:nth-child(odd){background:var(--tile2)}
-.empty{background:transparent;box-shadow:inset 0 0 0 2px #ffffff22}
-.meta{opacity:.8;margin-top:10px;font-size:13px}
+body{margin:0;background:#0b2258;color:#fff;font-family:system-ui}
+header{display:flex;gap:8px;justify-content:center;padding:10px}
+.btn{background:#1c56ff;border:none;color:#fff;padding:8px 12px;border-radius:8px;font-weight:600}
+#board{width:min(92vw,420px);aspect-ratio:1;margin:10px auto;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.t{display:grid;place-items:center;background:#123b9a;border-radius:12px;font-size:28px;user-select:none;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.empty{background:#0e2a72}
 </style>
-</head>
 <body>
-<div class="wrap">
-<h1>15 Puzzle</h1>
-<div class="bar">
-<button id="shuffleBtn">Shuffle</button>
-<button id="solveBtn">Solve</button>
-<div class="meta" id="moves">Moves: 0</div>
-</div>
-<div class="board" id="board"></div>
-<div class="meta">Tip: click a tile next to the empty square to slide it.</div>
-</div>
-
+<header>
+<button class="btn" id="shuffle">Shuffle</button>
+<button class="btn" id="restart">Restart</button>
+<div>Moves: <b id="moves">0</b></div>
+<div>Time: <b id="time">0</b>s</div>
+</header>
+<div id="board"></div>
 <script>
-const boardEl = document.getElementById('board');
-const movesEl = document.getElementById('moves');
-const N = 4;
-let tiles = [], moves = 0;
+const b=document.getElementById('board'), mv=document.getElementById('moves'), tm=document.getElementById('time');
+let tiles=[...Array(15).keys()].map(x=>x+1).concat(0), start=tiles.slice(), moves=0, t0, timer, empty=15;
+function render(){ b.innerHTML=''; tiles.forEach((v,i)=>{ const d=document.createElement('div'); d.className='t'+(v? '':' empty'); d.textContent=v||''; d.dataset.i=i; b.appendChild(d); }); mv.textContent=moves;}
+function pos(i){return [i/4|0, i%4]} function idx(r,c){return r*4+c}
+function neigh(i){const [r,c]=pos(i); return [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].filter(([rr,cc])=>rr>=0&&rr<4&&cc>=0&&cc<4).map(([rr,cc])=>idx(rr,cc))}
+function move(i){ if(neigh(i).includes(empty)){ [tiles[i],tiles[empty]]=[tiles[empty],tiles[i]]; empty=i; moves++; render(); checkWin(); } }
+function checkWin(){ if(tiles.every((v,i)=>v=== (i<15?i+1:0))){ clearInterval(timer); alert(`Solved in ${moves} moves, ${((Date.now()-t0)/1000|0)}s!`) } }
+function shuffle(){ tiles=start.slice(); empty=15; // Fisher-Yates with solvability
+do{ for(let i=tiles.length-1;i>0;i--){ const j=Math.random()*(i+1)|0; [tiles[i],tiles[j]]=[tiles[j],tiles[i]] }
+empty=tiles.indexOf(0);
+}while( (invCount(tiles)+ (empty/4|0))%2==1 ); moves=0; t0=Date.now(); clearInterval(timer); timer=setInterval(()=>tm.textContent=((Date.now()-t0)/1000|0),1000); render(); }
+function invCount(a){ let inv=0; for(let i=0;i<15;i++) for(let j=i+1;j<16;j++) if(a[i]&&a[j]&&a[i]>a[j]) inv++; return inv;}
+b.addEventListener('click',e=>{ const d=e.target.closest('.t'); if(!d)return; move(+d.dataset.i) });
+// swipe
+let sx=0, sy=0; b.addEventListener('touchstart',e=>{sx=e.touches[0].clientX; sy=e.touches[0].clientY},{passive:true});
+b.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy; if(Math.max(Math.abs(dx),Math.abs(dy))<20)return;
+const [er,ec]=pos(empty); let src;
+if(Math.abs(dx)>Math.abs(dy)){ src=idx(er, ec+(dx>0?-1:1)); } else { src=idx(er+(dy>0?-1:1), ec); }
+if(src>=0&&src<16) move(src);
+},{passive:true});
+document.getElementById('shuffle').onclick=shuffle;
+document.getElementById('restart').onclick=()=>{tiles=start.slice(); empty=15; moves=0; clearInterval(timer); tm.textContent='0'; render();}
+shuffle();
+</script></body></html>
 
-function makeSolved(){
-tiles = Array.from({length:16},(_,i)=> i===15 ? 0 : i+1);
-}
-function render(){
-boardEl.innerHTML = '';
-tiles.forEach((v,idx)=>{
-const div = document.createElement('div');
-div.className = 'cell' + (v===0?' empty':'');
-if(v!==0) div.textContent = v;
-div.onclick = ()=> tryMove(idx);
-boardEl.appendChild(div);
-});
-movesEl.textContent = `Moves: ${moves}`;
-}
-function pos(i){ return {r: (i/ N)|0, c: i%N}; }
-function neighbors(i){
-const {r,c}=pos(i);
-const list=[];
-if(r>0) list.push((r-1)*N+c);
-if(r<N-1) list.push((r+1)*N+c);
-if(c>0) list.push(r*N+c-1);
-if(c<N-1) list.push(r*N+c+1);
-return list;
-}
-function tryMove(i){
-const empty = tiles.indexOf(0);
-if(neighbors(i).includes(empty)){
-[tiles[i], tiles[empty]] = [tiles[empty], tiles[i]];
-moves++;
-render();
-if(isSolved()) alert('🎉 Solved in '+moves+' moves!');
-}
-}
-function isSolved(){
-for(let i=0;i<15;i++) if(tiles[i]!==i+1) return false;
-return tiles[15]===0;
-}
-// Fisher–Yates shuffle until solvable
-function shuffle(){
-moves=0;
-do{
-for(let i=tiles.length-1;i>0;i--){
-const j = Math.floor(Math.random()*(i+1));
-[tiles[i],tiles[j]]=[tiles[j],tiles[i]];
-}
-} while(!isSolvable(tiles));
-render();
-}
-function inversions(arr){
-const a = arr.filter(x=>x!==0);
-let inv=0;
-for(let i=0;i<a.length;i++) for(let j=i+1;j<a.length;j++) if(a[i]>a[j]) inv++;
-return inv;
-}
-function isSolvable(arr){
-const inv = inversions(arr);
-const rowFromBottom = N - pos(arr.indexOf(0)).r;
-// For 4x4: even grid -> blank on even row from bottom when inversions odd, or odd row when inversions even
-return (rowFromBottom%2===0) ? (inv%2===1) : (inv%2===0);
-}
-document.getElementById('shuffleBtn').onclick = shuffle;
-document.getElementById('solveBtn').onclick = ()=>{ makeSolved(); moves=0; render(); };
-
-makeSolved(); shuffle(); // start shuffled
-</script>
-</body>
-</html>
 

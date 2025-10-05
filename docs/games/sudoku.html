@@ -1,45 +1,43 @@
-<!doctype html><meta charset="utf-8"><title>Sudoku</title>
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Sudoku</title>
 <style>
-body{margin:0;background:#0f1324;color:#fff;font-family:system-ui;text-align:center}
-#b{display:grid;grid-template-columns:repeat(9,36px);gap:4px;justify-content:center;margin:12px}
-input{width:36px;height:36px;text-align:center;border-radius:6px;border:0;background:#24306a;color:#fff;font-weight:700}
-.fixed{background:#3a478d} button{background:#2f376e;color:#fff;border:0;border-radius:6px;padding:6px 10px;margin:6px}
+body{margin:0;background:#0b2258;color:#fff;font-family:system-ui}
+header{display:flex;gap:8px;justify-content:center;padding:10px}
+.btn{background:#1c56ff;border:none;color:#fff;padding:8px 12px;border-radius:8px;font-weight:600}
+.wrap{display:grid;place-items:center}
+table{border-collapse:collapse;background:#102b6b;border-radius:12px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+td{width:36px;height:36px;text-align:center;border:1px solid #2a4ea6}
+td input{width:100%;height:100%;border:none;background:transparent;color:#fff;text-align:center;font-size:18px}
+.fixed{background:#0f3aa7}
+.thickL{border-left:3px solid #2a4ea6}.thickT{border-top:3px solid #2a4ea6}
+.thickR{border-right:3px solid #2a4ea6}.thickB{border-bottom:3px solid #2a4ea6}
 </style>
-<h3>Sudoku</h3>
-<div id="b"></div>
-<div><button onclick="newGame()">New</button><button onclick="check()">Check</button></div>
+<body>
+<header>
+<button class="btn" id="check">Check</button>
+<button class="btn" id="solve">Solve</button>
+<button class="btn" id="reset">Reset</button>
+</header>
+<div class="wrap"><table id="g"></table></div>
 <script>
-const cells=[];let solution=[];
-function fillBoard(){
-// very small backtracking generator
-const grid=Array(81).fill(0), rows=[...Array(9)].map(_=>Array(10).fill(0)),
-cols=[...Array(9)].map(_=>Array(10).fill(0)), box=[...Array(9)].map(_=>Array(10).fill(0));
-function place(i){
-if(i==81)return true; const r=i/9|0,c=i%9,b=(r/3|0)*3+(c/3|0);
-const nums=[1,2,3,4,5,6,7,8,9].sort(_=>Math.random()-0.5);
-for(const n of nums){if(!rows[r][n]&&!cols[c][n]&&!box[b][n]){
-rows[r][n]=cols[c][n]=box[b][n]=1;grid[i]=n;if(place(i+1))return true;rows[r][n]=cols[c][n]=box[b][n]=0}
+const puzzle="530070000600195000098000060800060003400803001700020006060000280000419005000080079";
+const solution="534678912672195348198342567859761423426853791713924856961537284287419635345286179";
+const g=document.getElementById('g'); let cells=[];
+for(let r=0;r<9;r++){const tr=document.createElement('tr');
+for(let c=0;c<9;c++){const td=document.createElement('td');
+if(c%3==0)td.classList.add('thickL'); if(r%3==0)td.classList.add('thickT');
+if(c==8)td.classList.add('thickR'); if(r==8)td.classList.add('thickB');
+const i=r*9+c, v=puzzle[i]; const inp=document.createElement('input'); inp.maxLength=1; inp.pattern='[1-9]';
+if(v!=='0'){inp.value=v; inp.disabled=true; td.classList.add('fixed')}
+td.appendChild(inp); tr.appendChild(td); cells.push(inp);
+} g.appendChild(tr);
 }
-grid[i]=0;return false;
-}
-place(0);return grid;
-}
-function newGame(){
-const g=document.getElementById('b');g.innerHTML='';cells.length=0;
-solution=fillBoard(); // remove ~50 cells
-const puzzle=solution.slice();let holes=50;while(holes){let i=Math.random()*81|0;if(puzzle[i]){puzzle[i]=0;holes--}}
-for(let i=0;i<81;i++){
-const el=document.createElement('input');el.maxLength=1;el.value=puzzle[i]||'';
-if(puzzle[i]){el.readOnly=true;el.className='fixed'}
-el.oninput=()=>{el.value=el.value.replace(/[^1-9]/g,'')}
-cells.push(el);document.getElementById('b').appendChild(el);
-}
-}
-function check(){
-for(let i=0;i<81;i++){
-const v=+cells[i].value||0;if(v!==solution[i]){alert('Not solved yet.');return}
-}
-alert('Solved!');
-}
-newGame();
-</script>
+function check(){ let ok=true;
+for(let i=0;i<81;i++){const v=cells[i].value||'0'; const good=solution[i]===v; cells[i].style.color=good?'#fff':'#ff6b6b'; if(v!=='0'&&!good) ok=false;}
+if(ok) alert("Looks good!");}
+function solveAll(){ for(let i=0;i<81;i++) if(!cells[i].disabled) cells[i].value=solution[i]; }
+document.getElementById('check').onclick=check;
+document.getElementById('solve').onclick=solveAll;
+document.getElementById('reset').onclick=()=>location.reload();
+</script></body></html>
+

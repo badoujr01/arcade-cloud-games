@@ -1,71 +1,38 @@
-<!doctype html><meta charset="utf-8"><title>2048</title>
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>2048</title>
 <style>
-body{margin:0;background:#12151f;color:#fff;font-family:system-ui,Arial}
-h1{font-size:18px;margin:12px;text-align:center}
-#game{width:340px;margin:10px auto;background:#1c2340;padding:10px;border-radius:10px}
-.row{display:flex}
-.cell{width:75px;height:75px;margin:5px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-background:#242b57;font-weight:700;font-size:22px;transition:.08s}
-.n2{background:#2d356d}.n4{background:#38407c}.n8{background:#45508f}.n16{background:#5360a1}
-.n32{background:#6270b3}.n64{background:#7281c4}.n128{background:#8392d2}.n256{background:#95a3df}
-.n512{background:#a9b5ea}.n1024{background:#bdc6f3}.n2048{background:#d2d8fa;color:#111}
-#bar{width:340px;margin:0 auto 10px;display:flex;gap:8px;align-items:center;justify-content:center}
-button{background:#2f376e;color:#fff;border:0;border-radius:6px;padding:8px 12px;cursor:pointer}
+body{margin:0;background:#0b2258;color:#fff;font-family:system-ui}
+header{display:flex;gap:8px;justify-content:center;align-items:center;padding:10px;flex-wrap:wrap}
+.btn{background:#1c56ff;border:none;color:#fff;padding:8px 12px;border-radius:8px;font-weight:600}
+#g{width:min(92vw,420px);margin:10px auto;background:#102b6b;padding:8px;border-radius:12px;
+display:grid;grid-template-columns:repeat(4,1fr);gap:8px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.t{background:#0e2a72;height:82px;border-radius:10px;display:grid;place-items:center;font-size:26px;font-weight:800}
 </style>
-<h1>2048 (WASD / Arrow keys)</h1>
-<div id="bar"><button onclick="reset()">New Game</button><span id="score">Score: 0</span></div>
-<div id="game"></div>
+<body><header>
+<button class="btn" id="restart">Restart</button>
+<div>Score: <b id="s">0</b></div>
+</header>
+<div id="g"></div>
 <script>
-let size=4,grid=[],score=0,game=document.getElementById('game'),scoreEl=document.getElementById('score');
-function init(){grid=Array.from({length:size},()=>Array(size).fill(0));score=0;spawn();spawn();draw()}
-function draw(){
-game.innerHTML='';
-grid.forEach(r=>{
-let row=document.createElement('div');row.className='row';
-r.forEach(v=>{
-let c=document.createElement('div');c.className='cell'+(v?(' n'+v):'');c.textContent=v||'';
-row.appendChild(c);
-});
-game.appendChild(row);
-});
-scoreEl.textContent='Score: '+score;
-}
-function spawn(){
-let empties=[];
-for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(!grid[y][x])empties.push([y,x]);
-if(!empties.length)return false;
-let [y,x]=empties[Math.random()*empties.length|0];
-grid[y][x]=Math.random()<.9?2:4;return true;
-}
-function rotate(times=1){while(times--){const ng=Array.from({length:size},()=>Array(size).fill(0));
-for(let y=0;y<size;y++)for(let x=0;x<size;x++)ng[x][size-1-y]=grid[y][x];grid=ng}}
-function compressRow(r){
-r=r.filter(v=>v);for(let i=0;i<r.length-1;i++)if(r[i]&&r[i]==r[i+1]){r[i]*=2;score+=r[i];r[i+1]=0}
-return r.filter(v=>v).concat(Array(size).fill(0)).slice(0,size)
-}
+const g=document.getElementById('g'), sEl=document.getElementById('s'); let A,score=0,sx=0,sy=0;
+function rand(){const e=A.flatMap((v,i)=>v?[]:[i]); if(!e.length)return; const i=e[Math.random()*e.length|0]; A[i]=Math.random()<.9?2:4; draw();}
+function draw(){ g.innerHTML=''; A.forEach(v=>{const d=document.createElement('div'); d.className='t'; d.textContent=v||''; g.appendChild(d)}); sEl.textContent=score}
+function restart(){A=Array(16).fill(0); score=0; rand(); rand(); draw()}
+function slide(row){ row=row.filter(v=>v); for(let i=0;i<row.length-1;i++) if(row[i]==row[i+1]){row[i]*=2; score+=row[i]; row.splice(i+1,1)} while(row.length<4)row.push(0); return row}
 function move(dir){
-let before=JSON.stringify(grid);
-// 0:left 1:up 2:right 3:down via rotations
-if(dir==0){for(let y=0;y<size;y++)grid[y]=compressRow(grid[y])}
-if(dir==2){rotate(2);for(let y=0;y<size;y++)grid[y]=compressRow(grid[y]);rotate(2)}
-if(dir==1){rotate(3);for(let y=0;y<size;y++)grid[y]=compressRow(grid[y]);rotate(1)}
-if(dir==3){rotate(1);for(let y=0;y<size;y++)grid[y]=compressRow(grid[y]);rotate(3)}
-if(before!==JSON.stringify(grid)){spawn();draw();checkEnd()}
+const old=A.slice();
+if(dir=='L'){ for(let r=0;r<4;r++){ let row=A.slice(r*4,r*4+4); row=slide(row); A.splice(r*4,4,...row)} }
+if(dir=='R'){ for(let r=0;r<4;r++){ let row=A.slice(r*4,r*4+4).reverse(); row=slide(row).reverse(); A.splice(r*4,4,...row)} }
+if(dir=='U'){ for(let c=0;c<4;c++){ let col=[A[c],A[c+4],A[c+8],A[c+12]]; col=slide(col); [A[c],A[c+4],A[c+8],A[c+12]]=col } }
+if(dir=='D'){ for(let c=0;c<4;c++){ let col=[A[c+12],A[c+8],A[c+4],A[c]].reverse(); col=slide(col).reverse(); [A[c],A[c+4],A[c+8],A[c+12]]=col } }
+if(A.some((v,i)=>v!==old[i])){ rand(); draw(); if(!canMove()) setTimeout(()=>alert('Game Over!'),10); }
 }
-function movesLeft(){
-for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-if(!grid[y][x])return true;
-if(x<size-1&&grid[y][x]==grid[y][x+1])return true;
-if(y<size-1&&grid[y][x]==grid[y+1][x])return true;
-}return false
-}
-function checkEnd(){if(!movesLeft())alert('Game over! Score: '+score)}
-function reset(){init()}
-addEventListener('keydown',e=>{
-const k=e.key.toLowerCase();if(['arrowleft','a'].includes(k))move(0);
-else if(['arrowup','w'].includes(k))move(1);
-else if(['arrowright','d'].includes(k))move(2);
-else if(['arrowdown','s'].includes(k))move(3);
-});
-init();
-</script>
+function canMove(){ if(A.some(v=>!v)) return true; for(let r=0;r<4;r++)for(let c=0;c<4;c++){const i=r*4+c; if(c<3&&A[i]==A[i+1])return true; if(r<3&&A[i]==A[i+4])return true} return false;}
+addEventListener('keydown',e=>({ArrowLeft:'L',ArrowRight:'R',ArrowUp:'U',ArrowDown:'D'})[e.key]&&move(({ArrowLeft:'L',ArrowRight:'R',ArrowUp:'U',ArrowDown:'D'})[e.key]));
+g.addEventListener('touchstart',e=>{sx=e.touches[0].clientX; sy=e.touches[0].clientY},{passive:true});
+g.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
+if(Math.abs(dx)<10&&Math.abs(dy)<10)return; if(Math.abs(dx)>Math.abs(dy)) move(dx>0?'R':'L'); else move(dy>0?'D':'U');},{passive:true});
+document.getElementById('restart').onclick=restart; restart();
+</script></body></html>
+
+
