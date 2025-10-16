@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>VX Chess</title>
+<style>
+html, body {
+margin: 0; padding: 0;
+height: 100%; overflow: hidden;
+background: #000;
+}
+#topbar {
+display: flex;
+align-items: center;
+padding: 4px;
+background: #333;
+color: #fff;
+font-family: sans-serif;
+font-size: 14px;
+}
+#topbar > * {
+margin-right: 8px;
+}
+#status {
+margin-left: auto;
+font-weight: bold;
+}
+#historyWins {
+margin-left: 16px;
+font-size: 13px;
+}
+#counts {
+margin-left: 16px;
+font-size: 13px;
+}
+#canvas-container {
+width: 100%;
+height: calc(100% - 32px);
+display: flex;
+justify-content: center;
+align-items: center;
+position: relative;
+background: #000;
+}
+canvas {
+background: #666;
+touch-action: none;
+display: block;
+}
+#gameOverOverlay {
+position: absolute;
+top: 0; left: 0;
+width: 100%; height: 100%;
+background: rgba(0,0,0,0.8);
+display: none;
+justify-content: center;
+align-items: center;
+color: white;
+font-family: sans-serif;
+text-align: center;
+z-index: 10;
+opacity: 0;
+transition: opacity 0.5s ease;
+}
+#gameOverOverlay.show {
+display: flex;
+opacity: 1;
+}
+#gameOverOverlay button {
+margin-top: 20px;
+padding: 8px 16px;
+font-size: 20px;
+}
+button, select {
+padding: 2px 6px;
+font-size: 14px;
+}
+</style>
+<body>
+<div id="topbar">
+<span>VX Chess</span>
+<label>Mode:
+<select id="modeSelect">
+<option value="hvh">Human vs Human</option>
+<option value="hva">Human vs AI</option>
+</select>
+</label>
+<label>AI Difficulty:
+<select id="difficultySelect">
+<option value="veryeasy">Very Easy</option>
+<option value="easy">Easy</option>
+<option value="medium">Medium</option>
+<option value="hard">Hard</option>
+<option value="expert">Expert</option>
+</select>
+</label>
+<button id="themeToggle">Toggle Theme</button>
+<label>Timeout Policy:
+<select id="timeoutPolicySelect">
+<option value="skip">Skip Turn on Timeout</option>
+<option value="lose">Lose Game on Timeout</option>
+</select>
+</label>
+<button id="btnUndo">Undo</button>
+<button id="btnRedo">Redo</button>
+<button id="btnRestart">Restart</button>
+<span id="status">Loading…</span>
+<span id="historyWins">Wins — Human: 0 | AI: 0 | HvH: W1:0 / W2:0</span>
+<span id="counts">White captures: 0 • Black captures: 0</span>
+<button id="btnHint">Hint (3)</button>
+</div>
+<div id="canvas-container">
+<canvas id="boardCanvas"></canvas>
+<div id="gameOverOverlay">
+<div id="gameOverText"></div>
+<button id="btnPlayAgain">Play Again</button>
+</div>
+</div>
+
+<script>
+// === CONFIG ===
+const CONFIG = {
+aiDepth: { veryeasy: 0, easy: 1, medium: 2, hard: 4, expert: 5 },
+aiMoveDelay: 600,
+trailLifetime: 400,
+defaultTimerSeconds: 30
+};
+
+// === State ===
+let canvas, ctx;
+let board;
+let currentColor;
+let selected = null;
+let legalMoves = [];
+let mode = 'hva';
+let difficulty = 'easy';
+let timeoutPolicy = 'skip';
+let timerId = null;
+let timeLeft = CONFIG.defaultTimerSeconds;
+let gameOver = false;
+let waitingForMove = false;
+
+let moveHistory = [];
+let historyPointer = -1;
+
+let wins = { human: 0, ai: 0, hvh1: 0, hvh2: 0 };
+let captureCount = { w: 0, b: 0 };
+let hintsLeft = { w: 3, b: 3 };
+let hintMove = null;
+let trails = [];
+let lastMove = null;
+
+// === Helpers & Chess Logic ===
+function cloneBoard(bd) {
+return bd.map(row => row.map(cell => cell ? { type: cell.type, color: cell.color, moved: cell.moved || false } : null));
+}
+
+function inBounds(r, c) {
+return r >= 0 && r < 8 && c >= 0 && c < 8;
+}
+
+function oppositeColor(c) {
+return c === 'w' ? 'b' : 'w';
+}
+
+function playerName(c) {
+return c === 'w' ? 'White' : 'Black';
+}
+
+function initBoard() {
+board = Array(8).fill(null).map(_ => Array(8).fill(null));
+const back = ['r','n','b','q','k','b','n','r'];
+for (let c = 0; c < 8; c++) {
+board[0][c] = { type: back[c], color: 'b', moved: false };
+board[1][c] = { type: 'p', color: 'b' };
+board[6][c] = { type: 'p', color: 'w' };
+board[7][c] = { type: back[c], color: 'w', moved: false };
+}
+}
+
+function generatePieceMoves(bd, r, c) {
+let pc = bd[r][c];
+if (!pc) return [];
+let moves = [];
+const col = pc.color, opp = oppositeColor(col);
+
+function addMove(fr, fc, tr, tc, extra = {}) {
+let mv = { from: { r: fr, c: fc }, to: { r: tr, c: tc } };
+Object.assign(mv, extra);
+moves.push(mv);
+}
+
+switch (pc.type) {
+case 'p':
+let dr = (col === 'w' ? -1 : +1);
+let nr = r + dr, nc = c;
+if (inBounds(nr, nc) && !bd[nr][nc]) {
+if ((col === 'w' && nr === 0) || (col === 'b' && nr === 7)) {
+['q','r','b','n'].forEach(pr => addMove(r, c, nr, nc, { promotion: pr }));
+} else {
+addMove(r, c, nr, nc);
+}
+if ((col === 'w' && r === 6) || (col === 'b' && r === 1)) {
+let nr2 = r + dr*2;
+if (inBounds(nr2, nc) && !bd[nr2][nc]) {
+addMove(r, c, nr2, nc, { special: 'double' });
+}
+}
+}
+for (let dc of [-1, +1]) {
+let cr = r + dr, cc = c + dc;
+if (inBounds(cr, cc)) {
+let dest = bd[cr][cc];
+if (dest && dest.color === opp) {
+if ((col === 'w' && cr === 0) || (col === 'b' && cr === 7)) {
+['q','r','b','n'].forEach(pr => addMove(r, c, cr, cc, { promotion: pr }));
+} else {
+addMove(r, c, cr, cc);
+}
+}
+}
+}
+if (lastMove && lastMove.special === 'double') {
+let lm = lastMove;
+if (lm.to.r === r && Math.abs(lm.to.c - c) === 1) {
+let epRow = r + dr, epCol = lm.to.c;
+if (inBounds(epRow, epCol) && !bd[epRow][epCol]) {
+addMove(r, c, epRow, epCol, { special: 'ep', capture: { r: r, c: lm.to.c } });
+}
+}
+}
+break;
+
+case 'n':
+[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(d => {
+let tr = r + d[0], tc = c + d[1];
+if (inBounds(tr, tc) && (!bd[tr][tc] || bd[tr][tc].color === opp)) {
+addMove(r, c, tr, tc);
+}
+});
+break;
+
+case 'b':
+for (let [dr2, dc2] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
+let step = 1;
+while (true) {
+let rr = r + dr2*step, cc = c + dc2*step;
+if (!inBounds(rr, cc)) break;
+if (!bd[rr][cc]) {
+addMove(r, c, rr, cc);
+} else {
+if (bd[rr][cc].color === opp) addMove(r, c, rr, cc);
+break;
+}
+step++;
+}
+}
+break;
+
+case 'r':
+for (let [dr2, dc2] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+let step = 1;
+while (true) {
+let rr = r + dr2*step, cc = c + dc2*step;
+if (!inBounds(rr, cc)) break;
+if (!bd[rr][cc]) {
+addMove(r, c, rr, cc);
+} else {
+if (bd[rr][cc].color === opp) addMove(r, c, rr, cc);
+break;
+}
+step++;
+}
+}
+break;
+
+case 'q':
+for (let [dr2, dc2] of [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]]) {
+let step = 1;
+while (true) {
+let rr = r + dr2*step, cc = c + dc2*step;
+if (!inBounds(rr, cc)) break;
+if (!bd[rr][cc]) {
+addMove(r, c, rr, cc);
+} else {
+if (bd[rr][cc].color === opp) addMove(r, c, rr, cc);
+break;
+}
+step++;
+}
+}
+break;
+
+case 'k':
+for (let [dr2, dc2] of [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]]) {
+let rr = r + dr2, cc = c + dc2;
+if (inBounds(rr, cc) && (!bd[rr][cc] || bd[rr][cc].color === opp)) {
+addMove(r, c, rr, cc);
+}
+}
+if (!pc.moved) {
+// kingside castle
+if (bd[r][c+3] && bd[r][c+3].type === 'r' && !bd[r][c+3].moved) {
+if (!bd[r][c+1] && !bd[r][c+2]) {
+if (!isSquareAttacked(bd, r, c, opp)
+&& !isSquareAttacked(bd, r, c+1, opp)
+&& !isSquareAttacked(bd, r, c+2, opp)) {
+addMove(r, c, r, c+2, { special: 'castle', rookFrom: { r, c: c+3 }, rookTo: { r, c+1 } });
+}
+}
+}
+// queenside castle
+if (bd[r][c-4] && bd[r][c-4].type === 'r' && !bd[r][c-4].moved) {
+if (!bd[r][c-1] && !bd[r][c-2] && !bd[r][c-3]) {
+if (!isSquareAttacked(bd, r, c, opp)
+&& !isSquareAttacked(bd, r, c-1, opp)
+&& !isSquareAttacked(bd, r, c-2, opp)) {
+addMove(r, c, r, c-2, { special: 'castle', rookFrom: { r, c: c-4 }, rookTo: { r, c-1 } });
+}
+}
+}
+}
+break;
+}
+
+return moves;
+}
+
+function isSquareAttacked(bd, r, c, byColor) {
+for (let rr = 0; rr < 8; rr++) {
+for (let cc = 0; cc < 8; cc++) {
+let pc = bd[rr][cc];
+if (pc && pc.color === byColor) {
+let gen = generatePieceMoves(bd, rr, cc);
+for (let mv of gen) {
+if (mv.to.r === r && mv.to.c === c) return true;
+}
+}
+}
+}
+return false;
+}
+
+function isKingAttacked(bd, col) {
+let kr = -1, kc = -1;
+for (let r = 0; r < 8; r++) {
+for (let c = 0; c < 8; c++) {
+let pc = bd[r][c];
+if (pc && pc.color === col && pc.type === 'k') {
+kr = r; kc = c;
+}
+}
+}
+if (kr < 0) return true;
+return isSquareAttacked(bd, kr, kc, oppositeColor(col));
+}
+
+function applyMove(bd, mv) {
+const fr = mv.from, to = mv.to;
+let pc = bd[fr.r][fr.c];
+if (mv.special === 'ep') {
+bd[mv.capture.r][mv.capture.c] = null;
+captureCount[ oppositeColor(pc.color) ]++;
+}
+if (bd[to.r][to.c]) {
+captureCount[ pc.color ]++;
+}
+bd[to.r][to.c] = { type: (mv.promotion || pc.type), color: pc.color, moved: true };
+bd[fr.r][fr.c] = null;
+
+if (mv.special === 'castle') {
+let rf = mv.rookFrom, rt = mv.rookTo;
+bd[rt.r][rt.c] = bd[rf.r][rf.c];
+bd[rf.r][rf.c] = null;
+bd[rt.r][rt.c].moved = true;
+}
+
+lastMove = mv;
+}
+
+// === Undo / Redo ===
+function recordMove(mv) {
+moveHistory = moveHistory.slice(0, historyPointer + 1);
+moveHistory.push({
+board: cloneBoard(board),
+mv: mv,
+captureCount: { w: captureCount.w, b: captureCount.b },
+currentColor: currentColor
+});
+historyPointer = moveHistory.length - 1;
+}
+
+function undo() {
+if (historyPointer < 0) return;
+let rec = moveHistory[historyPointer];
+board = cloneBoard(rec.board);
+captureCount = { w: rec.captureCount.w, b: rec.captureCount.b };
+currentColor = rec.currentColor;
+historyPointer--;
+legalMoves = computeAllLegalMoves(board, currentColor);
+gameOver = false;
+hideGameOver();
+resetTimer();
+updateCountsDisplay();
+draw();
+updateHintButton();
+}
+
+function redo() {
+if (historyPointer + 1 >= moveHistory.length) return;
+historyPointer++;
+let rec = moveHistory[historyPointer];
+board = cloneBoard(rec.board);
+captureCount = { w: rec.captureCount.w, b: rec.captureCount.b };
+currentColor = rec.currentColor;
+legalMoves = computeAllLegalMoves(board, currentColor);
+gameOver = false;
+hideGameOver();
+resetTimer();
+updateCountsDisplay();
+draw();
+updateHintButton();
+}
+
+// === AI / Move Execution ===
+function aiMakeMove() {
+waitingForMove = true;
+const move = computeAIMove(board, currentColor);
+if (!move) {
+waitingForMove = false;
+return;
+}
+setTimeout(() => {
+if (!gameOver) makeMove(move);
+waitingForMove = false;
+}, CONFIG.aiMoveDelay);
+}
+
+function computeAIMove(bd, col) {
+let moves = computeAllLegalMoves(bd, col);
+if (moves.length === 0) return null;
+const lvl = difficulty;
+if (lvl === 'veryeasy') {
+return moves[Math.floor(Math.random() * moves.length)];
+} else if (lvl === 'easy') {
+let caps = moves.filter(mv => bd[mv.to.r][mv.to.c]);
+return (caps.length > 0 ? caps[Math.floor(Math.random()*caps.length)] : moves[Math.floor(Math.random()*moves.length)]);
+} else if (lvl === 'medium') {
+let best = null, bestScore = -Infinity;
+moves.forEach(mv => {
+let score = (mv.promotion ? 40 : 0);
+let dest = bd[mv.to.r][mv.to.c];
+if (dest && dest.color !== col) score += 20;
+if (score > bestScore) {
+bestScore = score;
+best = mv;
+}
+});
+return best;
+} else {
+let depth = CONFIG.aiDepth[lvl];
+let bestMove = null;
+function evalBoard(bd) {
+const pieceVal = { p:1, n:3, b:3, r:5, q:9, k:100 };
+let sum = 0;
+for (let r = 0; r < 8; r++) {
+for (let c = 0; c < 8; c++) {
+let pc = bd[r][c];
+if (!pc) continue;
+let v = pieceVal[pc.type];
+sum += (pc.color === col ? v : -v);
+}
+}
+return sum;
+}
+function minimax(bd, pl, d, alpha, beta) {
+let ms = computeAllLegalMoves(bd, pl);
+if (d === 0 || ms.length === 0) {
+return evalBoard(bd);
+}
+if (pl === col) {
+let val = -Infinity;
+ms.sort((a,b) => (b.promotion?50:0) - (a.promotion?50:0));
+for (let mv of ms) {
+let bd2 = cloneBoard(bd);
+applyMove(bd2, mv);
+let sub = minimax(bd2, oppositeColor(pl), d-1, alpha, beta);
+if (sub > val) {
+val = sub;
+if (d === depth) bestMove = mv;
+}
+alpha = Math.max(alpha, val);
+if (beta <= alpha) break;
+}
+return val;
+} else {
+let val = Infinity;
+ms.sort((a,b) => (a.promotion?50:0) - (b.promotion?50:0));
+for (let mv of ms) {
+let bd2 = cloneBoard(bd);
+applyMove(bd2, mv);
+let sub = minimax(bd2, oppositeColor(pl), d-1, alpha, beta);
+if (sub < val) val = sub;
+beta = Math.min(beta, val);
+if (beta <= alpha) break;
+}
+return val;
+}
+}
+minimax(bd, col, depth, -Infinity, Infinity);
+return bestMove;
+}
+}
+
+function makeMove(mv) {
+recordMove(mv);
+applyMove(board, mv);
+if (theme === 'cosmic') {
+let cell = canvas.width / 8;
+let x0 = (mv.from.c + 0.5)*cell, y0 = (mv.from.r + 0.5)*cell;
+let x1 = (mv.to.c + 0.5)*cell, y1 = (mv.to.r + 0.5)*cell;
+trails.push({ x0, y0, x1, y1, t0: Date.now(), t1: Date.now() + CONFIG.trailLifetime });
+}
+currentColor = oppositeColor(currentColor);
+legalMoves = computeAllLegalMoves(board, currentColor);
+
+if (legalMoves.length === 0) {
+gameOver = true;
+let winner;
+if (mode === 'hva') {
+winner = currentColor === 'w' ? "Black (AI) Wins!" : "White (You) Wins!";
+} else {
+winner = currentColor === 'w' ? "Black Wins!" : "White Wins!";
+}
+showGameOver(winner);
+if (mode === 'hva') {
+recordWin(winner.includes("You") ? "White" : "Black");
+} else {
+recordWin(winner.includes("White") ? "White" : "Black");
+}
+}
+
+resetTimer();
+setStatus(currentColor === 'w' ? "White to move" : "Black to move");
+selected = null;
+hintMove = null;
+updateCountsDisplay();
+updateHintButton();
+draw();
+if (mode === 'hva' && currentColor === 'b') {
+aiMakeMove();
+}
+}
+
+document.getElementById('btnUndo').addEventListener('click', undo);
+document.getElementById('btnRedo').addEventListener('click', redo);
+
+document.getElementById('btnHint').addEventListener('click', () => {
+if (gameOver || waitingForMove) return;
+if (hintsLeft[currentColor] <= 0) return;
+if (!legalMoves.length) return;
+let m = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+hintMove = m;
+hintsLeft[currentColor]--;
+updateHintButton();
+draw();
+setTimeout(() => {
+hintMove = null;
+draw();
+}, 1500);
+});
+
+document.getElementById('btnRestart').addEventListener('click', () => resetGame());
+document.getElementById('modeSelect').addEventListener('change', e => {
+mode = e.target.value;
+resetGame();
+});
+document.getElementById('difficultySelect').addEventListener('change', e => {
+difficulty = e.target.value;
+});
+document.getElementById('themeToggle').addEventListener('click', () => {
+theme = (theme === 'classic' ? 'cosmic' : 'classic');
+draw();
+});
+document.getElementById('timeoutPolicySelect').addEventListener('change', e => {
+timeoutPolicy = e.target.value;
+});
+document.getElementById('btnPlayAgain').addEventListener('click', () => resetGame());
+
+function resetGame() {
+initBoard();
+currentColor = 'w';
+selected = null;
+legalMoves = computeAllLegalMoves(board, currentColor);
+gameOver = false;
+waitingForMove = false;
+moveHistory = [];
+historyPointer = -1;
+captureCount = { w: 0, b: 0 };
+hintsLeft = { w: 3, b: 3 };
+hintMove = null;
+lastMove = null;
+hideGameOver();
+resetTimer();
+updateCountsDisplay();
+updateHintButton();
+setStatus("White to move");
+draw();
+if (mode === 'hva' && currentColor === 'b') aiMakeMove();
+}
+
+function resetTimer() {
+if (timerId) clearInterval(timerId);
+timeLeft = CONFIG.defaultTimerSeconds;
+if (!gameOver) {
+timerId = setInterval(() => {
+timeLeft--;
+if (timeLeft <= 0) {
+clearInterval(timerId);
+timerId = null;
+onTimeout();
+}
+draw();
+}, 1000);
+}
+}
+
+function onTimeout() {
+setStatus("Time expired for " + playerName(currentColor));
+if (timeoutPolicy === 'lose') {
+gameOver = true;
+let winner = playerName(oppositeColor(currentColor));
+showGameOver(winner + " wins by timeout");
+recordWin(winner);
+} else {
+currentColor = oppositeColor(currentColor);
+legalMoves = computeAllLegalMoves(board, currentColor);
+if (legalMoves.length === 0) {
+gameOver = true;
+let winner = playerName(oppositeColor(currentColor));
+showGameOver(winner + " wins — no moves");
+recordWin(winner);
+} else {
+resetTimer();
+setStatus(currentColor === 'w' ? "White to move" : "Black to move");
+if (mode === 'hva' && currentColor === 'b') aiMakeMove();
+}
+}
+}
+
+function updateHistoryWinsDisplay() {
+let hv = document.getElementById('historyWins');
+hv.textContent = `Wins — Human: ${wins.human} | AI: ${wins.ai} | HvH: W1:${wins.hvh1} / W2:${wins.hvh2}`;
+}
+function recordWin(winner) {
+if (mode === 'hva') {
+if (winner.includes("You") || winner.includes("White")) wins.human++;
+else wins.ai++;
+} else {
+if (winner.includes("White")) wins.hvh1++;
+else wins.hvh2++;
+}
+updateHistoryWinsDisplay();
+}
+function updateCountsDisplay() {
+document.getElementById('counts').textContent =
+`White captures: ${captureCount.w} • Black captures: ${captureCount.b}`;
+}
+function updateHintButton() {
+document.getElementById('btnHint').textContent = `Hint (${hintsLeft[currentColor]})`;
+}
+function showGameOver(msg) {
+let overlay = document.getElementById('gameOverOverlay');
+document.getElementById('gameOverText').innerHTML = msg;
+overlay.classList.add('show');
+}
+function hideGameOver() {
+let overlay = document.getElementById('gameOverOverlay');
+overlay.classList.remove('show');
+}
+function setStatus(txt) {
+document.getElementById('status').textContent = txt;
+}
+
+function draw() {
+if (!ctx) return;
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+let size = canvas.width;
+let cell = size / 8;
+for (let r = 0; r < 8; r++) {
+for (let c = 0; c < 8; c++) {
+let isDark = (r + c) % 2 === 1;
+if (theme === 'classic') {
+ctx.fillStyle = isDark ? '#769656' : '#eeeed2';
+} else {
+ctx.fillStyle = isDark ? '#1a1a2e' : '#16213e';
+}
+ctx.fillRect(c * cell, r * cell, cell, cell);
+}
+}
+
+if (theme === 'cosmic') {
+let now = Date.now();
+trails = trails.filter(tr => tr.t1 > now);
+for (let tr of trails) {
+let frac = (now - tr.t0) / (tr.t1 - tr.t0);
+if (frac < 0 || frac > 1) continue;
+ctx.strokeStyle = `rgba(255,255,255,${1 - frac})`;
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.moveTo(tr.x0, tr.y0);
+ctx.lineTo(tr.x0 + (tr.x1 - tr.x0)*frac, tr.y0 + (tr.y1 - tr.y0)*frac);
+ctx.stroke();
+}
+}
+
+if (selected) {
+ctx.strokeStyle = 'yellow';
+ctx.lineWidth = 3;
+ctx.strokeRect(selected.c * cell, selected.r * cell, cell, cell);
+for (let m of legalMoves) {
+if (m.from.r === selected.r && m.from.c === selected.c) {
+let tr = m.to.r, tc = m.to.c;
+ctx.strokeStyle = 'red';
+ctx.lineWidth = 3;
+ctx.strokeRect(tc * cell, tr * cell, cell, cell);
+}
+}
+}
+
+if (hintMove) {
+ctx.strokeStyle = 'cyan';
+ctx.lineWidth = 4;
+ctx.strokeRect(hintMove.from.c * cell, hintMove.from.r * cell, cell, cell);
+ctx.strokeRect(hintMove.to.c * cell, hintMove.to.r * cell, cell, cell);
+}
+
+ctx.font = `${cell * 0.6}px sans-serif`;
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+for (let r = 0; r < 8; r++) {
+for (let c = 0; c < 8; c++) {
+let pc = board[r][c];
+if (!pc) continue;
+let cx = (c + 0.5) * cell, cy = (r + 0.5) * cell;
+let color = pc.color === 'w'
+? (theme === 'classic' ? '#f0f0f0' : '#ff3f3f')
+: (theme === 'classic' ? '#202020' : '#3fe0c1');
+ctx.fillStyle = color;
+ctx.fillText(pc.type.toUpperCase(), cx, cy);
+}
+}
+
+if (!gameOver && isKingAttacked(board, currentColor)) {
+for (let r = 0; r < 8; r++) {
+for (let c = 0; c < 8; c++) {
+let pc = board[r][c];
+if (pc && pc.color === currentColor && pc.type === 'k') {
+ctx.strokeStyle = 'red';
+ctx.lineWidth = 4;
+ctx.strokeRect(c * cell, r * cell, cell, cell);
+}
+}
+}
+}
+
+ctx.fillStyle = 'rgba(0,0,0,0.6)';
+ctx.fillRect(5, 5, 80, 24);
+ctx.fillStyle = 'white';
+ctx.font = '16px sans-serif';
+ctx.fillText(timeLeft + 's', 10, 22);
+}
+
+function handleTap(x, y) {
+if (gameOver || waitingForMove) return;
+let rect = canvas.getBoundingClientRect();
+let cx = x, cy = y;
+// (x, y) passed already relative to canvas in click handlers
+let cell = canvas.width / 8;
+let c = Math.floor(cx / cell), r = Math.floor(cy / cell);
+if (!inBounds(r, c)) return;
+if (!selected) {
+let pc = board[r][c];
+if (pc && pc.color === currentColor) {
+let fm = legalMoves.filter(m => m.from.r === r && m.from.c === c);
+if (fm.length > 0) {
+selected = { r, c };
+draw();
+}
+}
+} else {
+let cand = legalMoves.filter(m => m.from.r === selected.r && m.from.c === selected.c && m.to.r === r && m.to.c === c);
+if (cand.length > 0) {
+makeMove(cand[0]);
+} else {
+let pc = board[r][c];
+if (pc && pc.color === currentColor) {
+let fm = legalMoves.filter(m => m.from.r === r && m.from.c === c);
+if (fm.length > 0) {
+selected = { r, c };
+draw();
+}
+}
+}
+}
+}
+
+function resizeCanvas() {
+let container = document.getElementById('canvas-container');
+let size = Math.min(container.clientWidth, container.clientHeight);
+canvas.width = canvas.height = size;
+draw();
+}
+
+window.onload = () => {
+canvas = document.getElementById('boardCanvas');
+ctx = canvas.getContext('2d');
+canvas.addEventListener('mousedown', e => {
+handleTap(e.offsetX, e.offsetY);
+});
+canvas.addEventListener('touchstart', e => {
+e.preventDefault();
+let rect = canvas.getBoundingClientRect();
+let t = e.touches[0];
+handleTap(t.clientX - rect.left, t.clientY - rect.top);
+});
+window.addEventListener('resize', resizeCanvas);
+
+initBoard();
+currentColor = 'w';
+legalMoves = computeAllLegalMoves(board, currentColor);
+resetTimer();
+updateHistoryWinsDisplay();
+updateCountsDisplay();
+updateHintButton();
+setStatus("White to move");
+resizeCanvas();
+draw();
+};
+</script>
+</body>
+</html>
+
+
+

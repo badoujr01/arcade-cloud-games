@@ -1,190 +1,804 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VX PLAY – CHECKERS</title>
-    <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div id="stars-bg"></div>
+<head>
+<meta charset="UTF-8" />
+<title>VX Checkers</title>
+<style>
+html, body {
+margin: 0; padding: 0;
+height: 100%; overflow: hidden;
+background: #000;
+}
+#topbar {
+display: flex;
+align-items: center;
+padding: 4px;
+background: #333;
+color: #fff;
+font-family: sans-serif;
+font-size: 14px;
+}
+#topbar > * {
+margin-right: 8px;
+}
+#status {
+margin-left: auto;
+font-weight: bold;
+}
+#historyWins {
+margin-left: 16px;
+font-size: 13px;
+}
+#counts {
+margin-left: 16px;
+font-size: 13px;
+}
+#canvas-container {
+width: 100%; height: calc(100% - 32px);
+display: flex; justify-content: center; align-items: center;
+position: relative;
+background: #000;
+}
+canvas {
+touch-action: none;
+background: #666;
+}
+#gameOverOverlay {
+position: absolute;
+top: 0; left: 0;
+width: 100%; height: 100%;
+background: rgba(0,0,0,0.8);
+display: none;
+justify-content: center;
+align-items: center;
+color: white;
+font-family: sans-serif;
+text-align: center;
+z-index: 10;
+opacity: 0;
+transition: opacity 0.5s ease;
+}
+#gameOverOverlay.show {
+display: flex;
+opacity: 1;
+}
+#gameOverOverlay button {
+margin-top: 20px;
+padding: 8px 16px;
+font-size: 20px;
+}
+button, select {
+padding: 2px 6px;
+font-size: 14px;
+}
+</style>
+<body>
+<div id="topbar">
+<span>VX Checkers</span>
+<label>Mode:
+<select id="modeSelect">
+<option value="hvh">Human vs Human</option>
+<option value="hva">Human vs AI</option>
+</select>
+</label>
+<label>AI Difficulty:
+<select id="difficultySelect">
+<option value="veryeasy">Very Easy</option>
+<option value="easy">Easy</option>
+<option value="medium">Medium</option>
+<option value="hard">Hard</option>
+<option value="expert">Expert</option>
+</select>
+</label>
+<button id="themeToggle">Toggle Theme</button>
+<label>Timeout Policy:
+<select id="timeoutPolicySelect">
+<option value="skip">Skip Turn on Timeout</option>
+<option value="lose">Lose Game on Timeout</option>
+</select>
+</label>
+<button id="btnRestart">Restart</button>
+<span id="status">Loading…</span>
+<span id="historyWins">Wins — Human: 0 | AI: 0 | HvH: R:0 / B:0</span>
+<span id="counts">Red: 0 pieces, 0 kills • Black: 0 pieces, 0 kills</span>
+<button id="btnHint">Hint (3)</button>
+</div>
+<div id="canvas-container">
+<canvas id="boardCanvas"></canvas>
+<div id="gameOverOverlay">
+<div id="gameOverText"></div>
+<button id="btnPlayAgain">Play Again</button>
+</div>
+</div>
 
-    <!-- Splash / Start Screen -->
-    <div id="splash" class="splash" aria-hidden="true">
-      <div class="splash-inner">
-        <div class="logo">VX PLAY <span>CHECKERS</span></div>
-        <div class="splash-anim">
-          <img src="assets/svg/nebula.svg" alt="Loading nebula" />
-        </div>
-        <div class="splash-actions">
-          <button id="splash-start" class="primary">Start</button>
-          <button id="splash-settings" aria-haspopup="dialog" title="Settings"><img src="assets/ui/gear.svg" alt="Settings"></button>
-          <button id="splash-about" title="About"><img src="assets/ui/crown.svg" alt="About"></button>
-        </div>
-        <div class="splash-toggles">
-          <label class="toggle small">
-            <input type="checkbox" id="toggle-bestof3" />
-            <span>Best-of-3</span>
-          </label>
-        </div>
-        <div id="profile-link" class="profile-link" role="button" tabindex="0" aria-label="Open profile and stats">
-          <img src="assets/ui/trophy.svg" alt="Profile" /> Profile & Stats
-        </div>
-      </div>
-    </div>
+<script>
+// === CONFIG ===
+const CONFIG = {
+boardSize: 8,
+defaultTimerSeconds: 30,
+defaultTimeoutPolicy: 'skip',
+defaultTheme: 'classic',
+defaultMode: 'hva',
+aiDepth: {
+veryeasy: 0, // no lookahead
+easy: 1,
+medium: 2,
+hard: 4,
+expert: 6
+},
+aiMoveDelay: 600,
+trailLifetime: 400
+};
 
-    <header class="topbar">
-      <h1>VX PLAY – CHECKERS</h1>
-      <div class="controls-group">
-        <button id="btn-pause" aria-pressed="false">Pause</button>
-        <button id="btn-restart">Restart</button>
-        <button id="btn-settings" aria-haspopup="dialog">Settings</button>
-      </div>
-    </header>
+// === State ===
+let canvas, ctx;
+let board;
+let currentPlayer;
+let selected = null;
+let legalMoves = [];
+let theme = CONFIG.defaultTheme;
+let mode = CONFIG.defaultMode;
+let difficulty = 'easy';
+let timeoutPolicy = CONFIG.defaultTimeoutPolicy;
+let timerSeconds = CONFIG.defaultTimerSeconds;
+let timerId = null;
+let timeLeft = timerSeconds;
+let waitingForMove = false;
+let gameOver = false;
 
-    <main class="layout">
-      <section class="side-panel">
-        <div class="panel-block">
-          <h2>Player</h2>
-          <div class="timer">
-            <span id="player-timer-text">30.0s</span>
-            <div class="bar"><div id="player-timer-bar"></div></div>
-          </div>
-        </div>
-        <div class="panel-block">
-          <h2>AI <small id="ai-diff-label">(Easy)</small></h2>
-          <div class="timer thinking">
-            <span id="ai-timer-text">--</span>
-            <div class="bar"><div id="ai-timer-bar"></div></div>
-          </div>
-        </div>
-        <div class="panel-block">
-          <h3>Status</h3>
-          <div id="status-text">Loading…</div>
-        </div>
-        <div class="panel-block">
-          <label class="toggle">
-            <input type="checkbox" id="toggle-sounds" checked />
-            <span>Sounds</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" id="toggle-hints" checked />
-            <span>Hints</span>
-          </label>
-        </div>
-      </section>
+let moveHistory = [];
+let wins = { human: 0, ai: 0, hvh1: 0, hvh2: 0 };
 
-      <section class="board-wrap">
-        <div id="countdown" aria-live="polite" hidden>
-          <span id="countdown-number">3</span>
-        </div>
-        <div id="capture-note" class="capture-note" hidden>Capture required</div>
-        <div id="ai-thinking" class="ai-thinking" hidden>
-          <img src="assets/svg/nebula.svg" alt="AI thinking" />
-          <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
-            <path class="bg" d="M18 2 a 16 16 0 0 1 0 32 a 16 16 0 0 1 0 -32" />
-            <path id="ai-ring" class="fg" d="M18 2 a 16 16 0 0 1 0 32 a 16 16 0 0 1 0 -32" />
-          </svg>
-        </div>
-        <canvas id="particles" class="particles" aria-hidden="true"></canvas>
-        <div id="board" class="board" role="grid" aria-label="Checkers board"></div>
-      </section>
-    </main>
+let killCount = { red: 0, black: 0 };
 
-    <dialog id="settings-dialog">
-      <form method="dialog" class="settings-form">
-        <h2>Settings</h2>
-        <label>
-          Mode
-          <select id="mode">
-            <option value="ai">Vs AI</option>
-            <option value="local">Local 2-Player</option>
-            <option value="online" disabled>Online (Coming soon)</option>
-          </select>
-        </label>
-        <label>
-          Difficulty
-          <select id="difficulty">
-            <option value="easy">Easy (3s)</option>
-            <option value="medium">Medium (6s)</option>
-            <option value="hard">Hard (12s)</option>
-          </select>
-        </label>
-        <label>
-          Your Side
-          <select id="player-side">
-            <option value="dark">Dark (moves first)</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
-        <label>
-          Theme
-          <select id="theme">
-            <option value="cosmic">Cosmic Blue</option>
-            <option value="solar">Solar Flare</option>
-            <option value="nebula" disabled>Nebula Purple (unlock 3 wins)</option>
-          </select>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-ambient" checked />
-          <span>Ambient Soundtrack</span>
-        </label>
-        <menu>
-          <button value="cancel">Close</button>
-          <button id="apply-settings" value="default">Apply</button>
-        </menu>
-      </form>
-    </dialog>
+let hintsLeft = { red: 3, black: 3 };
 
-    <dialog id="endgame-dialog" aria-label="Game result">
-      <form method="dialog" class="endgame">
-        <div class="result-icon"><img id="result-icon" src="assets/ui/trophy.svg" alt="Result"></div>
-        <h2 id="result-title">You Win</h2>
-        <p id="result-detail"></p>
-        <menu>
-          <button id="btn-play-again" value="default">Play Again</button>
-          <button id="btn-change-diff">Change Difficulty</button>
-          <button id="btn-back-splash">Back to Splash</button>
-        </menu>
-      </form>
-    </dialog>
+let trails = [];
+let hintMove = null;
 
-    <section class="readme">
-      <h2>README – How to Play</h2>
-      <p>
-        Checkers is played on the dark squares of the 8×8 board. Pieces move
-        diagonally forward one square. If an opponent’s piece is diagonally
-        adjacent with an empty square beyond, you must jump to capture it. Multiple
-        jumps are allowed in a single turn. When a piece reaches the far row, it
-        becomes a King and may move/ capture diagonally in both directions.
-      </p>
-      <ul>
-        <li><strong>Goal</strong>: capture all opponent pieces or block all moves.</li>
-        <li><strong>Turns</strong>: you vs AI. You have a 30s timer per turn.</li>
-        <li><strong>Difficulty</strong>: adjust AI thinking time in Settings.</li>
-        <li><strong>Controls</strong>: click/ tap a piece, then a highlighted square.</li>
-        <li><strong>Hints</strong>: toggle to highlight legal moves.</li>
-        <li><strong>Offline</strong>: the game runs fully offline.</li>
-      </ul>
-    </section>
+// === Utilities ===
+function cloneBoard(b) {
+return b.map(row => row.map(cell => cell ? {player: cell.player, king: cell.king} : null));
+}
+function inBounds(r, c) {
+return r >= 0 && r < CONFIG.boardSize && c >= 0 && c < CONFIG.boardSize;
+}
+function playerName(p) {
+return p === 1 ? "Red" : "Black";
+}
 
-    <script src="rules/engine.js"></script>
-    <script src="ui/theme.js"></script>
-    <script src="ui/sfx.js"></script>
-    <script src="ui/particles.js"></script>
-    <script src="ui/mode.js"></script>
-    <script src="ui/splash.js"></script>
-    <script src="net/messages.js" type="module"></script>
-    <script src="net/transport.js" type="module"></script>
-    <script src="ai.js"></script>
-    <script src="game.js"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() { navigator.serviceWorker.register('service-worker.js').catch(()=>{}); });
-      }
-    </script>
-  </body>
-  </html>
+// === Initialization / Restart ===
+function initGame() {
+board = Array(CONFIG.boardSize).fill(null).map(_ => Array(CONFIG.boardSize).fill(null));
+for (let r = 0; r < 3; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+if ((r + c) % 2 === 1) board[r][c] = {player: -1, king: false};
+}
+}
+for (let r = 5; r < 8; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+if ((r + c) % 2 === 1) board[r][c] = {player: 1, king: false};
+}
+}
+currentPlayer = 1;
+selected = null;
+legalMoves = computeAllLegalMoves(board, currentPlayer);
+gameOver = false;
+moveHistory = [];
+killCount = { red: 0, black: 0 };
+hintsLeft = { red: 3, black: 3 };
+hintMove = null;
+hideGameOver();
+resetTimer();
+draw();
+updateCountsDisplay();
+updateHintButton();
+setStatus("Red to move");
+if (mode === 'hva' && currentPlayer === -1) {
+aiMakeMove();
+}
+}
+
+document.getElementById('btnRestart').addEventListener('click', () => {
+initGame();
+updateHistoryWinsDisplay();
+});
+document.getElementById('modeSelect').addEventListener('change', e => {
+mode = e.target.value;
+initGame();
+updateHistoryWinsDisplay();
+});
+document.getElementById('difficultySelect').addEventListener('change', e => {
+difficulty = e.target.value;
+});
+document.getElementById('themeToggle').addEventListener('click', () => {
+theme = (theme === 'classic' ? 'cosmic' : 'classic');
+draw();
+});
+document.getElementById('timeoutPolicySelect').addEventListener('change', e => {
+timeoutPolicy = e.target.value;
+});
+
+document.getElementById('btnHint').addEventListener('click', () => {
+if (gameOver || waitingForMove) return;
+let pl = currentPlayer === 1 ? 'red' : 'black';
+if (hintsLeft[pl] <= 0) return;
+let moves = legalMoves;
+if (moves.length === 0) return;
+let m = moves[Math.floor(Math.random() * moves.length)];
+hintMove = m;
+hintsLeft[pl]--;
+updateHintButton();
+draw();
+setTimeout(() => {
+hintMove = null;
+draw();
+}, 1500);
+});
+
+document.getElementById('btnPlayAgain').addEventListener('click', () => {
+initGame();
+updateHistoryWinsDisplay();
+});
+
+function resetTimer() {
+if (timerId !== null) clearInterval(timerId);
+timerId = null;
+timeLeft = timerSeconds;
+if (!gameOver) {
+timerId = setInterval(() => {
+timeLeft--;
+if (timeLeft <= 0) {
+clearInterval(timerId);
+timerId = null;
+onTimeout();
+}
+draw();
+}, 1000);
+}
+}
+
+function onTimeout() {
+setStatus("Time expired for " + playerName(currentPlayer));
+if (timeoutPolicy === 'lose') {
+gameOver = true;
+let winner = playerName(-currentPlayer);
+showGameOver(winner + " wins by timeout");
+recordWin(winner);
+} else {
+currentPlayer = -currentPlayer;
+legalMoves = computeAllLegalMoves(board, currentPlayer);
+if (legalMoves.length === 0) {
+gameOver = true;
+let winner = playerName(-currentPlayer);
+showGameOver(winner + " wins — no moves");
+recordWin(winner);
+} else {
+resetTimer();
+setStatus(playerName(currentPlayer) + " to move");
+if (mode === 'hva' && currentPlayer === -1) {
+aiMakeMove();
+}
+}
+}
+}
+
+function recordWin(winner) {
+if (mode === 'hva') {
+if (winner === "Red") wins.human++;
+else wins.ai++;
+} else {
+if (winner === "Red") wins.hvh1++;
+else wins.hvh2++;
+}
+updateHistoryWinsDisplay();
+}
+
+function updateHistoryWinsDisplay() {
+let hv = document.getElementById('historyWins');
+hv.textContent = `Wins — Human: ${wins.human} | AI: ${wins.ai} | HvH: R:${wins.hvh1} / B:${wins.hvh2}`;
+}
+
+function updateCountsDisplay() {
+let cr = 0, cb = 0;
+for (let r = 0; r < CONFIG.boardSize; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+let pc = board[r][c];
+if (!pc) continue;
+if (pc.player === 1) cr++;
+else cb++;
+}
+}
+document.getElementById('counts').textContent =
+`Red: ${cr} pieces, ${killCount.red} kills • Black: ${cb} pieces, ${killCount.black} kills`;
+}
+
+function updateHintButton() {
+let pl = currentPlayer === 1 ? 'red' : 'black';
+document.getElementById('btnHint').textContent = `Hint (${hintsLeft[pl]})`;
+}
+
+function showGameOver(msg) {
+let overlay = document.getElementById('gameOverOverlay');
+document.getElementById('gameOverText').innerHTML = msg;
+overlay.classList.add('show');
+}
+function hideGameOver() {
+let overlay = document.getElementById('gameOverOverlay');
+overlay.classList.remove('show');
+}
+
+// === Rules / Move Generation ===
+function computeAllLegalMoves(bd, player) {
+let moves = [];
+for (let r = 0; r < CONFIG.boardSize; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+let pc = bd[r][c];
+if (pc && pc.player === player) {
+findCaptures(bd, r, c, pc.king, [], new Set(), moves, {r, c});
+}
+}
+}
+if (moves.length > 0) return moves;
+for (let r = 0; r < CONFIG.boardSize; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+let pc = bd[r][c];
+if (pc && pc.player === player) {
+findQuietMoves(bd, r, c, pc.king, moves);
+}
+}
+}
+return moves;
+}
+
+function findQuietMoves(bd, r, c, isKing, moves) {
+const allDirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+const forwardDirs = currentPlayer === 1 ? [[-1,1],[-1,-1]] : [[1,1],[1,-1]];
+const dirs = isKing ? allDirs : forwardDirs;
+for (let [dr, dc] of dirs) {
+let nr = r + dr, nc = c + dc;
+if (inBounds(nr, nc) && !bd[nr][nc]) {
+moves.push({ from: {r, c}, to: {r: nr, c: nc}, captures: [] });
+}
+if (isKing) {
+let step = 2;
+while (true) {
+nr = r + dr * step; nc = c + dc * step;
+if (!inBounds(nr, nc) || bd[nr][nc]) break;
+moves.push({ from: {r, c}, to: {r: nr, c: nc}, captures: [] });
+step++;
+}
+}
+}
+}
+
+function findCaptures(bd, r, c, isKing, capturedSoFar, usedSet, moves, origin) {
+let foundOne = false;
+const allDirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+const forwardDirs = currentPlayer === 1 ? [[-1,1],[-1,-1]] : [[1,1],[1,-1]];
+const dirs = isKing ? allDirs : forwardDirs;
+
+for (let [dr, dc] of dirs) {
+if (!isKing) {
+let mr = r + dr, mc = c + dc;
+let lr = r + 2*dr, lc = c + 2*dc;
+if (inBounds(lr, lc) && bd[mr][mc] && bd[mr][mc].player === -currentPlayer && !bd[lr][lc]) {
+let capKey = mr + ',' + mc;
+if (usedSet.has(capKey)) continue;
+let bd2 = cloneBoard(bd);
+bd2[r][c] = null;
+bd2[mr][mc] = null;
+let toKing = isKing;
+if ((currentPlayer === 1 && lr === 0) || (currentPlayer === -1 && lr === CONFIG.boardSize - 1)) {
+toKing = true;
+}
+bd2[lr][lc] = {player: currentPlayer, king: toKing};
+let us2 = new Set(usedSet);
+us2.add(capKey);
+findCaptures(bd2, lr, lc, toKing, capturedSoFar.concat([{r: mr, c: mc}]), us2, moves, origin);
+foundOne = true;
+}
+} else {
+let sr = r + dr, sc = c + dc;
+while (inBounds(sr, sc) && !bd[sr][sc]) {
+sr += dr; sc += dc;
+}
+if (inBounds(sr, sc) && bd[sr][sc].player === -currentPlayer) {
+let mr = sr + dr, mc = sc + dc;
+while (inBounds(mr, mc)) {
+if (bd[mr][mc]) break;
+let capKey = sr + ',' + sc;
+if (usedSet.has(capKey)) {
+mr += dr; mc += dc;
+continue;
+}
+let bd2 = cloneBoard(bd);
+bd2[r][c] = null;
+bd2[sr][sc] = null;
+bd2[mr][mc] = {player: currentPlayer, king: true};
+let us2 = new Set(usedSet);
+us2.add(capKey);
+findCaptures(bd2, mr, mc, true, capturedSoFar.concat([{r: sr, c: sc}]), us2, moves, origin);
+foundOne = true;
+mr += dr; mc += dc;
+}
+}
+}
+}
+if (!foundOne && capturedSoFar.length > 0) {
+moves.push({ from: {r: origin.r, c: origin.c}, to: {r, c}, captures: capturedSoFar });
+}
+}
+
+function applyMove(bd, move) {
+let {from, to, captures} = move;
+let pc = bd[from.r][from.c];
+bd[from.r][from.c] = null;
+for (let cap of captures) {
+bd[cap.r][cap.c] = null;
+}
+let newKing = pc.king;
+if (!newKing) {
+if ((pc.player === 1 && to.r === 0) || (pc.player === -1 && to.r === CONFIG.boardSize - 1)) {
+newKing = true;
+}
+}
+bd[to.r][to.c] = {player: pc.player, king: newKing};
+if (captures.length > 0) {
+if (pc.player === 1) killCount.red += captures.length;
+else killCount.black += captures.length;
+}
+}
+
+// === AI ===
+function aiMakeMove() {
+waitingForMove = true;
+const move = computeAIMove(board, currentPlayer);
+if (!move) {
+waitingForMove = false;
+return;
+}
+setTimeout(() => {
+if (!gameOver) makeMove(move);
+waitingForMove = false;
+}, CONFIG.aiMoveDelay);
+}
+
+function computeAIMove(bd, player) {
+let moves = computeAllLegalMoves(bd, player);
+if (moves.length === 0) return null;
+
+let lvl = difficulty;
+if (lvl === 'veryeasy') {
+// truly random
+return moves[Math.floor(Math.random() * moves.length)];
+} else if (lvl === 'easy') {
+let caps = moves.filter(m => m.captures.length > 0);
+return (caps.length > 0 ? caps[Math.floor(Math.random() * caps.length)] : moves[Math.floor(Math.random() * moves.length)]);
+} else if (lvl === 'medium') {
+// greedy + shallow
+let best = null, bestScore = -Infinity;
+for (let m of moves) {
+let score = m.captures.length * 100;
+let pc = bd[m.from.r][m.from.c];
+if (!pc.king) {
+let willKing = (pc.player === 1 && m.to.r === 0) || (pc.player === -1 && m.to.r === CONFIG.boardSize - 1);
+if (willKing) score += 50;
+}
+if (score > bestScore) {
+bestScore = score;
+best = m;
+}
+}
+return best;
+} else {
+// hard or expert → minimax with alpha-beta
+let depth = CONFIG.aiDepth[lvl];
+let bestMove = null;
+
+function evalBoard(bd) {
+let sum = 0;
+for (let r = 0; r < CONFIG.boardSize; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+let pc = bd[r][c];
+if (!pc) continue;
+let v = 1 + (pc.king ? 2 : 0);
+sum += v * pc.player;
+}
+}
+return sum;
+}
+
+function minimax(bd, pl, d, alpha, beta) {
+let ms = computeAllLegalMoves(bd, pl);
+if (d === 0 || ms.length === 0) {
+return evalBoard(bd);
+}
+if (pl === player) {
+let val = -Infinity;
+// move ordering: consider captures first
+ms.sort((a, b) => b.captures.length - a.captures.length);
+for (let m of ms) {
+let bd2 = cloneBoard(bd);
+applyMove(bd2, m);
+let sub = minimax(bd2, -pl, d - 1, alpha, beta);
+if (sub > val) {
+val = sub;
+if (d === depth) bestMove = m;
+}
+alpha = Math.max(alpha, val);
+if (beta <= alpha) break;
+}
+return val;
+} else {
+let val = Infinity;
+ms.sort((a, b) => a.captures.length - b.captures.length);
+for (let m of ms) {
+let bd2 = cloneBoard(bd);
+applyMove(bd2, m);
+let sub = minimax(bd2, -pl, d - 1, alpha, beta);
+if (sub < val) {
+val = sub;
+}
+beta = Math.min(beta, val);
+if (beta <= alpha) break;
+}
+return val;
+}
+}
+
+minimax(bd, player, depth, -Infinity, Infinity);
+return bestMove;
+}
+}
+
+// === Move Execution / Input ===
+function makeMove(move) {
+let fr = move.from, to = move.to;
+let hist = `${playerName(currentPlayer)}: (${fr.r},${fr.c})→(${to.r},${to.c})`;
+moveHistory.push(hist);
+applyMove(board, move);
+
+if (theme === 'cosmic') {
+let cell = canvas.width / CONFIG.boardSize;
+let x0 = (move.from.c + 0.5)*cell, y0 = (move.from.r + 0.5)*cell;
+let x1 = (move.to.c + 0.5)*cell, y1 = (move.to.r + 0.5)*cell;
+trails.push({x0, y0, x1, y1, t0: Date.now(), t1: Date.now() + CONFIG.trailLifetime});
+}
+
+if (move.captures.length > 0) {
+let pc = board[move.to.r][move.to.c];
+let more = [];
+findCaptures(board, move.to.r, move.to.c, pc.king, [], new Set(), more, {r: move.to.r, c: move.to.c});
+if (more.length > 0) {
+legalMoves = more.map(m => ({
+from: {r: move.to.r, c: move.to.c},
+to: m.to,
+captures: m.captures
+}));
+selected = {r: move.to.r, c: move.to.c};
+resetTimer();
+draw();
+setStatus("Continue capture");
+updateCountsDisplay();
+return;
+}
+}
+
+currentPlayer = -currentPlayer;
+legalMoves = computeAllLegalMoves(board, currentPlayer);
+updateCountsDisplay();
+
+// immediate game-over if zero pieces
+let redPieces = 0, blackPieces = 0;
+for (let r = 0; r < CONFIG.boardSize; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+let pc = board[r][c];
+if (!pc) continue;
+if (pc.player === 1) redPieces++;
+else blackPieces++;
+}
+}
+if (redPieces === 0 || blackPieces === 0) {
+gameOver = true;
+let message;
+if (mode === 'hva') {
+if (redPieces === 0) message = "🤖 AI Wins!";
+else message = "🏆 You Win!";
+} else {
+message = redPieces === 0 ? "Black Wins!" : "Red Wins!";
+}
+showGameOver(message);
+recordWin(redPieces === 0 ? "Black" : "Red");
+draw();
+return;
+}
+
+if (legalMoves.length === 0) {
+gameOver = true;
+let winner = playerName(-currentPlayer);
+showGameOver(winner + " wins!");
+recordWin(winner);
+draw();
+return;
+}
+
+resetTimer();
+setStatus(playerName(currentPlayer) + " to move");
+selected = null;
+hintMove = null;
+draw();
+updateHintButton();
+if (mode === 'hva' && currentPlayer === -1) {
+aiMakeMove();
+}
+}
+
+function handleTap(x, y) {
+if (gameOver || waitingForMove) return;
+let sz = Math.min(canvas.width, canvas.height);
+let cell = sz / CONFIG.boardSize;
+let c = Math.floor(x / cell), r = Math.floor(y / cell);
+if (!inBounds(r, c)) return;
+if (!selected) {
+let pc = board[r][c];
+if (pc && pc.player === currentPlayer) {
+let fromMoves = legalMoves.filter(m => m.from.r === r && m.from.c === c);
+if (fromMoves.length > 0) {
+selected = {r, c};
+draw();
+}
+}
+} else {
+let cand = legalMoves.filter(m => m.from.r === selected.r && m.from.c === selected.c && m.to.r === r && m.to.c === c);
+if (cand.length > 0) {
+makeMove(cand[0]);
+} else {
+let pc = board[r][c];
+if (pc && pc.player === currentPlayer) {
+let fromMoves = legalMoves.filter(m => m.from.r === r && m.from.c === c);
+if (fromMoves.length > 0) {
+selected = {r, c};
+draw();
+}
+}
+}
+}
+}
+
+function resizeCanvas() {
+let cw = window.innerWidth, ch = window.innerHeight - document.getElementById('topbar').offsetHeight;
+let side = Math.min(cw, ch);
+canvas.width = side; canvas.height = side;
+draw();
+}
+
+function setStatus(txt) {
+document.getElementById('status').textContent = txt;
+}
+
+// === Rendering ===
+function draw() {
+if (!ctx) return;
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+let size = canvas.width;
+let cell = size / CONFIG.boardSize;
+for (let r = 0; r < CONFIG.boardSize; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+let isDark = (r + c) % 2 === 1;
+if (theme === 'classic') {
+ctx.fillStyle = isDark ? '#8B4513' : '#F0D9B5';
+} else {
+ctx.fillStyle = isDark ? '#1a1a2e' : '#16213e';
+}
+ctx.fillRect(c * cell, r * cell, cell, cell);
+}
+}
+
+if (theme === 'cosmic') {
+let now = Date.now();
+trails = trails.filter(tr => tr.t1 > now);
+for (let tr of trails) {
+let frac = (now - tr.t0) / (tr.t1 - tr.t0);
+if (frac < 0 || frac > 1) continue;
+ctx.strokeStyle = `rgba(255,255,255,${1 - frac})`;
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.moveTo(tr.x0, tr.y0);
+ctx.lineTo(tr.x0 + (tr.x1 - tr.x0) * frac, tr.y0 + (tr.y1 - tr.y0) * frac);
+ctx.stroke();
+}
+}
+
+if (selected) {
+ctx.strokeStyle = 'yellow';
+ctx.lineWidth = 3;
+ctx.strokeRect(selected.c * cell, selected.r * cell, cell, cell);
+for (let m of legalMoves) {
+if (m.from.r === selected.r && m.from.c === selected.c) {
+let tr = m.to.r, tc = m.to.c;
+ctx.strokeStyle = m.captures.length > 0 ? 'red' : 'green';
+ctx.lineWidth = 3;
+ctx.strokeRect(tc * cell, tr * cell, cell, cell);
+}
+}
+}
+
+if (hintMove) {
+ctx.strokeStyle = 'cyan';
+ctx.lineWidth = 4;
+ctx.strokeRect(hintMove.from.c * cell, hintMove.from.r * cell, cell, cell);
+ctx.strokeRect(hintMove.to.c * cell, hintMove.to.r * cell, cell, cell);
+}
+
+for (let r = 0; r < CONFIG.boardSize; r++) {
+for (let c = 0; c < CONFIG.boardSize; c++) {
+let pc = board[r][c];
+if (!pc) continue;
+let cx = (c + 0.5) * cell, cy = (r + 0.5) * cell;
+let radius = cell * 0.4;
+if (theme === 'classic') {
+ctx.fillStyle = pc.player === 1 ? 'red' : 'black';
+} else {
+ctx.fillStyle = pc.player === 1 ? '#ff3f3f' : '#3fe0c1';
+}
+ctx.beginPath();
+ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+ctx.fill();
+
+if (pc.king) {
+if (theme === 'classic') {
+ctx.fillStyle = 'gold';
+ctx.font = `${radius * 1.2}px sans-serif`;
+ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+ctx.fillText('👑', cx, cy - radius * 0.1);
+} else {
+ctx.strokeStyle = 'aqua';
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.arc(cx, cy, radius * 0.6, 0, Math.PI * 2);
+ctx.stroke();
+ctx.fillStyle = 'white';
+ctx.beginPath();
+ctx.arc(cx, cy - radius * 0.5, radius * 0.15, 0, Math.PI * 2);
+ctx.fill();
+}
+}
+}
+}
+
+ctx.fillStyle = 'rgba(0,0,0,0.6)';
+ctx.fillRect(5, 5, 80, 24);
+ctx.fillStyle = 'white';
+ctx.font = '16px sans-serif';
+ctx.fillText(timeLeft + 's', 10, 22);
+}
+
+// === Input initialization ===
+function initInput() {
+canvas.addEventListener('mousedown', e => {
+handleTap(e.offsetX, e.offsetY);
+});
+canvas.addEventListener('touchstart', e => {
+e.preventDefault();
+let rect = canvas.getBoundingClientRect();
+let t = e.touches[0];
+handleTap(t.clientX - rect.left, t.clientY - rect.top);
+});
+window.addEventListener('resize', resizeCanvas);
+}
+
+// === Startup ===
+window.onload = () => {
+canvas = document.getElementById('boardCanvas');
+ctx = canvas.getContext('2d');
+initInput();
+initGame();
+resizeCanvas();
+updateHistoryWinsDisplay();
+};
+</script>
+</body>
+</html>
 
 
