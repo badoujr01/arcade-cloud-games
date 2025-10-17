@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>VX Chess</title>
 <style>
 html, body {
@@ -129,9 +129,10 @@ defaultTimerSeconds: 30
 // === State ===
 let canvas, ctx;
 let board;
-let currentColor;
+let currentColor; // 'w' or 'b'
 let selected = null;
 let legalMoves = [];
+
 let mode = 'hva';
 let difficulty = 'easy';
 let timeoutPolicy = 'skip';
@@ -140,7 +141,7 @@ let timeLeft = CONFIG.defaultTimerSeconds;
 let gameOver = false;
 let waitingForMove = false;
 
-let moveHistory = [];
+let moveHistory = []; // for undo/redo
 let historyPointer = -1;
 
 let wins = { human: 0, ai: 0, hvh1: 0, hvh2: 0 };
@@ -150,19 +151,17 @@ let hintMove = null;
 let trails = [];
 let lastMove = null;
 
-// === Helpers & Chess Logic ===
+// === Chess Helpers & Move Logic ===
 function cloneBoard(bd) {
-return bd.map(row => row.map(cell => cell ? { type: cell.type, color: cell.color, moved: cell.moved || false } : null));
+return bd.map(r => r.map(c => c ? { type: c.type, color: c.color, moved: c.moved || false } : null));
 }
 
 function inBounds(r, c) {
 return r >= 0 && r < 8 && c >= 0 && c < 8;
 }
-
 function oppositeColor(c) {
 return c === 'w' ? 'b' : 'w';
 }
-
 function playerName(c) {
 return c === 'w' ? 'White' : 'Black';
 }
@@ -184,9 +183,9 @@ if (!pc) return [];
 let moves = [];
 const col = pc.color, opp = oppositeColor(col);
 
-function addMove(fr, fc, tr, tc, extra = {}) {
+function addMove(fr, fc, tr, tc, extras = {}) {
 let mv = { from: { r: fr, c: fc }, to: { r: tr, c: tc } };
-Object.assign(mv, extra);
+Object.assign(mv, extras);
 moves.push(mv);
 }
 
@@ -233,9 +232,9 @@ break;
 
 case 'n':
 [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(d => {
-let tr = r + d[0], tc = c + d[1];
-if (inBounds(tr, tc) && (!bd[tr][tc] || bd[tr][tc].color === opp)) {
-addMove(r, c, tr, tc);
+let rr = r + d[0], cc = c + d[1];
+if (inBounds(rr, cc) && (!bd[rr][cc] || bd[rr][cc].color === opp)) {
+addMove(r, c, rr, cc);
 }
 });
 break;
@@ -275,7 +274,7 @@ step++;
 break;
 
 case 'q':
-for (let [dr2, dc2] of [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]]) {
+for (let [dr2, dc2] of [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[ -1,0],[0,1],[0,-1]]) {
 let step = 1;
 while (true) {
 let rr = r + dr2*step, cc = c + dc2*step;
@@ -299,7 +298,6 @@ addMove(r, c, rr, cc);
 }
 }
 if (!pc.moved) {
-// kingside castle
 if (bd[r][c+3] && bd[r][c+3].type === 'r' && !bd[r][c+3].moved) {
 if (!bd[r][c+1] && !bd[r][c+2]) {
 if (!isSquareAttacked(bd, r, c, opp)
@@ -309,7 +307,6 @@ addMove(r, c, r, c+2, { special: 'castle', rookFrom: { r, c: c+3 }, rookTo: { r,
 }
 }
 }
-// queenside castle
 if (bd[r][c-4] && bd[r][c-4].type === 'r' && !bd[r][c-4].moved) {
 if (!bd[r][c-1] && !bd[r][c-2] && !bd[r][c-3]) {
 if (!isSquareAttacked(bd, r, c, opp)
@@ -378,7 +375,7 @@ bd[rt.r][rt.c].moved = true;
 lastMove = mv;
 }
 
-// === Undo / Redo ===
+// === Undo/Redo ===
 function recordMove(mv) {
 moveHistory = moveHistory.slice(0, historyPointer + 1);
 moveHistory.push({
@@ -422,29 +419,16 @@ draw();
 updateHintButton();
 }
 
-// === AI / Move Execution ===
-function aiMakeMove() {
-waitingForMove = true;
-const move = computeAIMove(board, currentColor);
-if (!move) {
-waitingForMove = false;
-return;
-}
-setTimeout(() => {
-if (!gameOver) makeMove(move);
-waitingForMove = false;
-}, CONFIG.aiMoveDelay);
-}
-
+// === AI + Move Execution ===
 function computeAIMove(bd, col) {
 let moves = computeAllLegalMoves(bd, col);
 if (moves.length === 0) return null;
 const lvl = difficulty;
 if (lvl === 'veryeasy') {
-return moves[Math.floor(Math.random() * moves.length)];
+return moves[Math.floor(Math.random()*moves.length)];
 } else if (lvl === 'easy') {
 let caps = moves.filter(mv => bd[mv.to.r][mv.to.c]);
-return (caps.length > 0 ? caps[Math.floor(Math.random()*caps.length)] : moves[Math.floor(Math.random()*moves.length)]);
+return caps.length > 0 ? caps[Math.floor(Math.random()*caps.length)] : moves[Math.floor(Math.random()*moves.length)];
 } else if (lvl === 'medium') {
 let best = null, bestScore = -Infinity;
 moves.forEach(mv => {
@@ -452,8 +436,7 @@ let score = (mv.promotion ? 40 : 0);
 let dest = bd[mv.to.r][mv.to.c];
 if (dest && dest.color !== col) score += 20;
 if (score > bestScore) {
-bestScore = score;
-best = mv;
+bestScore = score; best = mv;
 }
 });
 return best;
@@ -519,7 +502,7 @@ if (theme === 'cosmic') {
 let cell = canvas.width / 8;
 let x0 = (mv.from.c + 0.5)*cell, y0 = (mv.from.r + 0.5)*cell;
 let x1 = (mv.to.c + 0.5)*cell, y1 = (mv.to.r + 0.5)*cell;
-trails.push({ x0, y0, x1, y1, t0: Date.now(), t1: Date.now() + CONFIG.trailLifetime });
+trails.push({ x0, y0, x1, y1, t0: Date.now(), t1: Date.now()+CONFIG.trailLifetime });
 }
 currentColor = oppositeColor(currentColor);
 legalMoves = computeAllLegalMoves(board, currentColor);
@@ -559,7 +542,7 @@ document.getElementById('btnHint').addEventListener('click', () => {
 if (gameOver || waitingForMove) return;
 if (hintsLeft[currentColor] <= 0) return;
 if (!legalMoves.length) return;
-let m = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+let m = legalMoves[Math.floor(Math.random()*legalMoves.length)];
 hintMove = m;
 hintsLeft[currentColor]--;
 updateHintButton();
@@ -570,7 +553,7 @@ draw();
 }, 1500);
 });
 
-document.getElementById('btnRestart').addEventListener('click', () => resetGame());
+document.getElementById('btnRestart').addEventListener('click', resetGame);
 document.getElementById('modeSelect').addEventListener('change', e => {
 mode = e.target.value;
 resetGame();
@@ -585,12 +568,11 @@ draw();
 document.getElementById('timeoutPolicySelect').addEventListener('change', e => {
 timeoutPolicy = e.target.value;
 });
-document.getElementById('btnPlayAgain').addEventListener('click', () => resetGame());
+document.getElementById('btnPlayAgain').addEventListener('click', resetGame);
 
 function resetGame() {
 initBoard();
 currentColor = 'w';
-selected = null;
 legalMoves = computeAllLegalMoves(board, currentColor);
 gameOver = false;
 waitingForMove = false;
@@ -606,7 +588,9 @@ updateCountsDisplay();
 updateHintButton();
 setStatus("White to move");
 draw();
-if (mode === 'hva' && currentColor === 'b') aiMakeMove();
+if (mode === 'hva' && currentColor === 'b') {
+aiMakeMove();
+}
 }
 
 function resetTimer() {
@@ -643,7 +627,9 @@ recordWin(winner);
 } else {
 resetTimer();
 setStatus(currentColor === 'w' ? "White to move" : "Black to move");
-if (mode === 'hva' && currentColor === 'b') aiMakeMove();
+if (mode === 'hva' && currentColor === 'b') {
+aiMakeMove();
+}
 }
 }
 }
@@ -687,14 +673,13 @@ if (!ctx) return;
 ctx.clearRect(0, 0, canvas.width, canvas.height);
 let size = canvas.width;
 let cell = size / 8;
+
 for (let r = 0; r < 8; r++) {
 for (let c = 0; c < 8; c++) {
 let isDark = (r + c) % 2 === 1;
-if (theme === 'classic') {
-ctx.fillStyle = isDark ? '#769656' : '#eeeed2';
-} else {
-ctx.fillStyle = isDark ? '#1a1a2e' : '#16213e';
-}
+ctx.fillStyle = theme === 'classic'
+? (isDark ? '#769656' : '#eeeed2')
+: (isDark ? '#1a1a2e' : '#16213e');
 ctx.fillRect(c * cell, r * cell, cell, cell);
 }
 }
@@ -703,7 +688,7 @@ if (theme === 'cosmic') {
 let now = Date.now();
 trails = trails.filter(tr => tr.t1 > now);
 for (let tr of trails) {
-let frac = (now - tr.t0) / (tr.t1 - tr.t0);
+let frac = (now - tr.t0)/(tr.t1 - tr.t0);
 if (frac < 0 || frac > 1) continue;
 ctx.strokeStyle = `rgba(255,255,255,${1 - frac})`;
 ctx.lineWidth = 2;
@@ -771,53 +756,28 @@ ctx.font = '16px sans-serif';
 ctx.fillText(timeLeft + 's', 10, 22);
 }
 
-function handleTap(x, y) {
-if (gameOver || waitingForMove) return;
-let rect = canvas.getBoundingClientRect();
-let cx = x, cy = y;
-// (x, y) passed already relative to canvas in click handlers
-let cell = canvas.width / 8;
-let c = Math.floor(cx / cell), r = Math.floor(cy / cell);
-if (!inBounds(r, c)) return;
-if (!selected) {
-let pc = board[r][c];
-if (pc && pc.color === currentColor) {
-let fm = legalMoves.filter(m => m.from.r === r && m.from.c === c);
-if (fm.length > 0) {
-selected = { r, c };
-draw();
-}
-}
-} else {
-let cand = legalMoves.filter(m => m.from.r === selected.r && m.from.c === selected.c && m.to.r === r && m.to.c === c);
-if (cand.length > 0) {
-makeMove(cand[0]);
-} else {
-let pc = board[r][c];
-if (pc && pc.color === currentColor) {
-let fm = legalMoves.filter(m => m.from.r === r && m.from.c === c);
-if (fm.length > 0) {
-selected = { r, c };
-draw();
+function computeAllLegalMoves(bd, col) {
+let moves = [];
+for (let r = 0; r < 8; r++) {
+for (let c = 0; c < 8; c++) {
+let pc = bd[r][c];
+if (pc && pc.color === col) {
+moves.push(...generatePieceMoves(bd, r, c));
 }
 }
 }
-}
-}
-
-function resizeCanvas() {
-let container = document.getElementById('canvas-container');
-let size = Math.min(container.clientWidth, container.clientHeight);
-canvas.width = canvas.height = size;
-draw();
+// filter out moves that leave king in check
+return moves.filter(mv => {
+let bd2 = cloneBoard(bd);
+applyMove(bd2, mv);
+return !isKingAttacked(bd2, col);
+});
 }
 
 window.onload = () => {
 canvas = document.getElementById('boardCanvas');
 ctx = canvas.getContext('2d');
-canvas.addEventListener('mousedown', e => {
-handleTap(e.offsetX, e.offsetY);
-});
+canvas.addEventListener('mousedown', e => handleTap(e.offsetX, e.offsetY));
 canvas.addEventListener('touchstart', e => {
 e.preventDefault();
 let rect = canvas.getBoundingClientRect();
@@ -834,12 +794,15 @@ updateHistoryWinsDisplay();
 updateCountsDisplay();
 updateHintButton();
 setStatus("White to move");
+
 resizeCanvas();
 draw();
 };
 </script>
 </body>
 </html>
+
+
 
 
 
