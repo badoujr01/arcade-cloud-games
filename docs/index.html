@@ -1,92 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Arcade Cloud – Games</title>
-<style>
-:root{
---bg:#0b2049; --bg2:#123a7c; --card:#15408f; --text:#e9f1ff; --muted:#a9c3ff;
---radius:16px;
-}
-*{box-sizing:border-box}
-html,body{margin:0;height:100%;background:linear-gradient(160deg,var(--bg),var(--bg2));color:var(--text);font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Noto Sans, "Apple Color Emoji","Segoe UI Emoji";}
-header{max-width:1024px;margin:24px auto 8px;padding:0 16px}
-h1{margin:0 0 8px;font-weight:700;font-size:24px}
-.hint{color:var(--muted);font-size:14px;margin:0 0 16px}
-.grid{max-width:1024px;margin:0 auto;padding:8px 16px 32px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-@media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:560px){.grid{grid-template-columns:1fr}}
-.card{display:flex;flex-direction:column;gap:10px;background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
-.row{display:flex;align-items:center;gap:10px}
-.emoji{font-size:28px;line-height:1}
-.title{font-weight:600}
-.open{margin-left:auto;font-size:12px;background:#ffffff1a;color:var(--text);padding:.25rem .5rem;border-radius:999px;text-decoration:none}
-a.card{color:inherit;text-decoration:none;transition:transform .08s ease}
-a.card:hover{transform:translateY(-2px)}
-footer{max-width:1024px;margin:12px auto 32px;padding:0 16px;color:var(--muted);font-size:13px}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>voltXplay by mandenX</title>
+  <style>
+    body {
+      background: #0D47A1;
+      color: white;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      margin: 0;
+      background: linear-gradient(90deg, #64b5f6, #e3f2fd);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .subtitle {
+      font-size: 1.1rem;
+      opacity: 0.9;
+      margin-top: 8px;
+    }
+    .games {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .game-card {
+      background: rgba(13, 71, 161, 0.4);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .game-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      background: rgba(13, 71, 161, 0.6);
+    }
+    .game-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin: 0 0 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .game-desc {
+      font-size: 0.95rem;
+      opacity: 0.85;
+      margin-bottom: 16px;
+      flex-grow: 1;
+    }
+    .open-btn {
+      background: #1565C0;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .open-btn:hover {
+      background: #1976D2;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+    @media (max-width: 600px) {
+      .games {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
-<header>
-<h1>Arcade Cloud</h1>
-<p class="hint">10 lightweight, online games – hosted by you on GitHub Pages.</p>
-</header>
+  <div class="header">
+    <h1>voltXplay</h1>
+    <div class="subtitle">Your arcade hub — powered by mandenX</div>
+  </div>
 
-<main class="grid">
-<a class="card" href="./games/hextris.html">
-<div class="row"><span class="emoji">🔷</span><span class="title">Hextris</span><span class="open">OPEN</span></div>
-<div class="hint">Tetris-inspired hex rotation.</div>
-</a>
+  <div class="games">
+    <div class="game-card">
+      <h2 class="game-title">🔷 Hextris</h2>
+      <p class="game-desc">Tetris-inspired hex rotation.</p>
+      <a href="games/hextris.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">♟️ Lichess (Chess)</h2>
+      <p class="game-desc">Free, open chess server.</p>
+      <a href="https://lichess.org" class="open-btn" target="_blank">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">⭕ VX PLAY-Checkers (Checkers)</h2>
+      <p class="game-desc">Play smart. Cosmic design. Human vs AI.</p>
+      <a href="games/checkers.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">✏️ Sudoku</h2>
+      <p class="game-desc">Classic number puzzle.</p>
+      <a href="games/sudoku.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">🧩 15 Puzzle</h2>
+      <p class="game-desc">Sliding tiles puzzle.</p>
+      <a href="games/15puzzle.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">🃏 Solitaire (Klondike)</h2>
+      <p class="game-desc">Single-player card classic.</p>
+      <a href="games/solitaire.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">🐍 Snake</h2>
+      <p class="game-desc">The retro snake.</p>
+      <a href="games/snake.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">🧱 Breakout</h2>
+      <p class="game-desc">Brick breaker.</p>
+      <a href="games/breakout.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">💣 Minesweeper</h2>
+      <p class="game-desc">Avoid the mines.</p>
+      <a href="games/minesweeper.html" class="open-btn">OPEN</a>
+    </div>
+    <div class="game-card">
+      <h2 class="game-title">🔢 2048</h2>
+      <p class="game-desc">Slide & merge to 2048.</p>
+      <a href="games/2048.html" class="open-btn">OPEN</a>
+    </div>
+  </div>
 
-<a class="card" href="./games/lichess.html">
-<div class="row"><span class="emoji">♟️</span><span class="title">Lichess (Chess)</span><span class="open">OPEN</span></div>
-<div class="hint">Free, open chess server.</div>
-</a>
-
-<a class="card" href="./games/checkers.html">
-<div class="row"><span class="emoji">⭕</span><span class="title">VX PLAY-Checkers (Checkers)</span><span class="open">OPEN</span></div>
-<div class="hint">play smart. cosmic design.human vs ai.</div>
-</a>
-
-<a class="card" href="./games/sudoku.html">
-<div class="row"><span class="emoji">✏️</span><span class="title">Sudoku</span><span class="open">OPEN</span></div>
-<div class="hint">Classic number puzzle.</div>
-</a>
-
-<a class="card" href="./games/15puzzle.html">
-<div class="row"><span class="emoji">🧩</span><span class="title">15 Puzzle</span><span class="open">OPEN</span></div>
-<div class="hint">Sliding tiles puzzle.</div>
-</a>
-
-<a class="card" href="./games/solitaire.html">
-<div class="row"><span class="emoji">🃏</span><span class="title">Solitaire (Klondike)</span><span class="open">OPEN</span></div>
-<div class="hint">Single-player card classic.</div>
-</a>
-
-<a class="card" href="./games/snake.html">
-<div class="row"><span class="emoji">🐍</span><span class="title">Snake</span><span class="open">OPEN</span></div>
-<div class="hint">The retro snake.</div>
-</a>
-
-<a class="card" href="./games/breakout.html">
-<div class="row"><span class="emoji">🧱</span><span class="title">Breakout</span><span class="open">OPEN</span></div>
-<div class="hint">Brick breaker.</div>
-</a>
-
-<a class="card" href="./games/minesweeper.html">
-<div class="row"><span class="emoji">💣</span><span class="title">Minesweeper</span><span class="open">OPEN</span></div>
-<div class="hint">Avoid the mines.</div>
-</a>
-
-<a class="card" href="./games/2048.html">
-<div class="row"><span class="emoji">🔢</span><span class="title">2048</span><span class="open">OPEN</span></div>
-<div class="hint">Slide & merge to 2048.</div>
-</a>
-</main>
-
-<footer>
-<div>Hosted by <strong>GitHub Pages</strong>. Links point to files in <code>/docs/games/</code>.</div>
-</footer>
+  <div class="footer">
+    &copy; 2025 mandenX. All rights reserved.
+  </div>
 </body>
 </html>
