@@ -1,106 +1,659 @@
-<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hextris (Tetris-style)</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>VX Hextris Cosmic — Orbit Edition</title>
 <style>
-:root{--bg:#0b2258;--card:#123b9a;--fg:#fff}
-body{margin:0;background:linear-gradient(180deg,#0b2258,#0a1b46);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Arial}
-header,footer{display:flex;gap:8px;align-items:center;justify-content:center;padding:10px}
-.btn{background:#1c56ff;border:none;color:#fff;padding:8px 12px;border-radius:8px;font-weight:600}
-.hud{display:flex;gap:16px;justify-content:center}
-#root{display:grid;place-items:center;padding:10px}
-canvas{background:#0e2a72;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
-.pad{position:fixed;inset:auto 0 8px 0;display:flex;justify-content:center;gap:8px}
-.pad .btn{padding:12px 16px}
+/* ===========================================================
+VX HEXTRIS COSMIC — ORBIT EDITION (single-file)
+=========================================================== */
+:root{
+--c1:#00f5ff; --c2:#00ffa8; --c3:#ffd166; --c4:#ff6b6b; --c5:#c77dff; --c6:#6ee7ff;
+--neon:#00f5ff;
+}
+html,body{height:100%;margin:0;overflow:hidden;background:#020513;color:#bff; font-family:system-ui,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;}
+/* Deep-space gradient behind the animated starfield */
+body::before{
+content:""; position:fixed; inset:0;
+background: radial-gradient(1200px 700px at 20% 10%, #04162e 0%, #030b19 40%, #020512 100%),
+radial-gradient(900px 500px at 85% 80%, rgba(16,0,40,.5) 0%, rgba(2,5,18,0) 60%);
+z-index:-2;
+}
+header{
+position:fixed; top:8px; left:0; right:0; text-align:center;
+font-size:min(5.5vw,36px); letter-spacing:.5px;
+color:#bff; user-select:none; z-index:3;
+text-shadow:0 0 6px var(--neon),0 0 18px rgba(0,245,255,.45);
+}
+header .brand{ display:inline-block; padding:.1rem .8rem; border-radius:12px;
+background:linear-gradient(90deg, rgba(0,245,255,.15), rgba(0,245,255,.06));
+border:1px solid rgba(0,245,255,.35); box-shadow:0 0 22px rgba(0,245,255,.15) inset;
+}
+#hud{
+position:fixed; top:62px; left:10px; z-index:3; font-size:13px; line-height:1.25;
+color:#bff; text-shadow:0 0 6px rgba(0,245,255,.6);
+}
+#hud .row{ margin:.2rem 0;}
+#controls{
+position:fixed; bottom:12px; left:0; right:0; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; z-index:3;
+}
+button{
+background:linear-gradient(180deg, rgba(0,245,255,.18), rgba(0,245,255,.10));
+border:1px solid rgba(0,245,255,.5); color:#bff; padding:.5rem .8rem; border-radius:10px; cursor:pointer;
+text-shadow:0 0 8px rgba(0,245,255,.7); box-shadow:0 0 10px rgba(0,245,255,.25) inset, 0 0 12px rgba(0,245,255,.12);
+backdrop-filter: blur(2px);
+}
+button:hover{ filter:brightness(1.15);}
+button:active{ transform:translateY(1px); }
+
+#settingsPanel{
+position:fixed; inset:0; display:none; place-items:center; z-index:5;
+background:linear-gradient(180deg, rgba(0,0,0,.65), rgba(0,0,0,.65));
+}
+#settingsCard{
+width:min(92vw,460px);
+background:rgba(6,15,32,.9); border:1px solid rgba(0,245,255,.45); border-radius:16px; padding:18px 16px; color:#bff;
+box-shadow:0 0 40px rgba(0,245,255,.18), inset 0 0 24px rgba(0,245,255,.08);
+}
+#settingsCard h3{ margin:.2rem 0 .8rem; }
+.setrow{ display:flex; align-items:center; gap:10px; margin:.45rem 0; }
+select, .toggle{
+background:rgba(0,245,255,.1); border:1px solid rgba(0,245,255,.5); color:#bff; padding:.35rem .5rem; border-radius:8px;
+}
+footer{
+position:fixed; bottom:4px; left:0; right:0; text-align:center; font-size:12px; color:#6bb; z-index:2;
+}
+#game{ position:fixed; inset:0; display:block; z-index:1; }
+
+/* Minimal animated starfield (painted on separate offscreen canvas in JS, but
+this subtle twinkle layer adds parallax sparkle) */
+.star-twinkle{
+position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.25;
+background-image:
+radial-gradient(2px 2px at 20% 10%, #fff, rgba(255,255,255,0) 60%),
+radial-gradient(1.5px 1.5px at 60% 40%, #fff, rgba(255,255,255,0) 60%),
+radial-gradient(1.5px 1.5px at 80% 75%, #fff, rgba(255,255,255,0) 60%),
+radial-gradient(1px 1px at 35% 85%, #fff, rgba(255,255,255,0) 60%),
+radial-gradient(1px 1px at 10% 65%, #fff, rgba(255,255,255,0) 60%);
+animation: drift 120s linear infinite;
+}
+@keyframes drift{
+from{ transform:translate3d(0,0,0); }
+to{ transform:translate3d(-1200px,450px,0); }
+}
 </style>
+</head>
 <body>
-<header class="hud">
-<button class="btn" id="start">Start</button>
-<button class="btn" id="pause">Pause</button>
-<button class="btn" id="restart">Restart</button>
-<span>Score: <b id="score">0</b></span>
-<span>Level: <b id="lvl">1</b></span>
-</header>
-<div id="root"><canvas id="cv" width="240" height="480"></canvas></div>
-<div class="pad">
-<button class="btn" id="left">◀</button>
-<button class="btn" id="rot">⟳</button>
-<button class="btn" id="right">▶</button>
-<button class="btn" id="down">▼</button>
+<div class="star-twinkle"></div>
+<header><span class="brand">✨ VX Play Cosmic Arcade ✨</span></header>
+
+<!-- HUD -->
+<div id="hud">
+<div class="row">Score: <strong id="score">0</strong></div>
+<div class="row">Level: <strong id="level">1</strong></div>
+<div class="row">High Score: <strong id="hi">0</strong></div>
+<div class="row">Time: <strong id="time">0</strong>s</div>
 </div>
+
+<!-- Main Canvas -->
+<canvas id="game"></canvas>
+
+<!-- Controls -->
+<div id="controls">
+<button id="leftBtn">⟲ Left</button>
+<button id="rightBtn">⟳ Right</button>
+<button id="startBtn">▶ Start</button>
+<button id="pauseBtn">⏸ Pause</button>
+<button id="resumeBtn">▶ Resume</button>
+<button id="restartBtn">🔁 Restart</button>
+<button id="settingsBtn">⚙️ Settings</button>
+</div>
+
+<!-- Settings -->
+<div id="settingsPanel">
+<div id="settingsCard">
+<h3>⚙️ Settings</h3>
+<div class="setrow">
+<label>Sound:</label>
+<select id="soundSel">
+<option value="on">ON</option>
+<option value="off">OFF</option>
+</select>
+</div>
+<div class="setrow">
+<label>Difficulty:</label>
+<select id="diffSel">
+<option value="easy">Easy</option>
+<option value="medium">Medium</option>
+<option value="hard">Hard</option>
+<option value="insane">Insane</option>
+</select>
+</div>
+<div class="setrow">
+<label>Shape:</label>
+<select id="shapeSel">
+<option value="5">Pentagon (5)</option>
+<option value="6" selected>Hexagon (6)</option>
+<option value="7">Heptagon (7)</option>
+<option value="8">Octagon (8)</option>
+<option value="9">Nonagon (9)</option>
+<option value="10">Decagon (10)</option>
+</select>
+</div>
+<div class="setrow">
+<button id="resetHi">Reset High Score</button>
+<div style="flex:1"></div>
+<button id="closeSettings">Close</button>
+</div>
+</div>
+</div>
+
+<footer>© 2025 VX Play Studios – All Rights Reserved.</footer>
+
 <script>
-/* Tiny Tetris */
-const W=10,H=20,S=24, cv=document.getElementById('cv'), g=cv.getContext('2d');
-cv.width=W*S; cv.height=H*S;
-const COLORS=['#8be9fd','#50fa7b','#ffb86c','#bd93f9','#ff79c6','#f1fa8c','#ff5555'];
+/* ===========================================================
+GAME – ORBITAL HEXTRIS WITH HORIZONTAL BLOCKS
+- Manual rotation only
+- Bars fall radially towards center and attach to edges
+- Match >=3 adjacent same-colored on any side → clear
+- Polygon sides selectable 5..10 (pentagon..decagon)
+- Neon cosmic theme, particles, WebAudio beeps, localStorage
+=========================================================== */
 
-const SHAPES=[
-[[1,1,1,1]], [[1,1],[1,1]], [[0,1,0],[1,1,1]],
-[[1,0,0],[1,1,1]], [[0,0,1],[1,1,1]],
-[[1,1,0],[0,1,1]], [[0,1,1],[1,1,0]]
-];
+/* ---------- Canvas / Resize ---------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = innerWidth, H = innerHeight, CX = W/2, CY = H/2;
+function fit(){ W = canvas.width = innerWidth; H = canvas.height = innerHeight; CX = W/2; CY = H/2; }
+addEventListener('resize', fit); fit();
 
-let grid,cur,x,y,score=0,level=1,t=0,paused=true,over=false,dropI=0;
+/* ---------- UI elements ---------- */
+const elScore = document.getElementById('score');
+const elLevel = document.getElementById('level');
+const elHi = document.getElementById('hi');
+const elTime = document.getElementById('time');
 
-function empty(){grid=[...Array(H)].map(_=>Array(W).fill(0))}
-function rot(m){return m[0].map((_,i)=>m.map(r=>r[i]).reverse())}
-function collide(nx=x,ny=y,nc=cur){
-for(let r=0;r<nc.length;r++)for(let c=0;c<nc[0].length;c++){
-if(!nc[r][c])continue; let X=nx+c,Y=ny+r;
-if(X<0||X>=W||Y>=H|| (Y>=0&&grid[Y][X])) return true;
-} return false;
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const resumeBtn = document.getElementById('resumeBtn');
+const restartBtn = document.getElementById('restartBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+
+const settingsPanel = document.getElementById('settingsPanel');
+const soundSel = document.getElementById('soundSel');
+const diffSel = document.getElementById('diffSel');
+const shapeSel = document.getElementById('shapeSel');
+const resetHi = document.getElementById('resetHi');
+const closeSettings = document.getElementById('closeSettings');
+
+/* ---------- Persistent storage ---------- */
+const LS = {
+hi: +localStorage.getItem('vx_hextris_hi') || 0,
+sound: (localStorage.getItem('vx_hextris_sound')||'on'),
+diff: localStorage.getItem('vx_hextris_diff') || 'medium',
+sides: +(localStorage.getItem('vx_hextris_sides') || 6)
+};
+elHi.textContent = LS.hi;
+soundSel.value = LS.sound;
+diffSel.value = LS.diff;
+shapeSel.value = String(LS.sides);
+
+/* ---------- Sound (tiny WebAudio) ---------- */
+let audioCtx = null;
+function ensureAudio(){
+if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
 }
-function merge(){for(let r=0;r<cur.length;r++)for(let c=0;c<cur[0].length;c++)
-if(cur[r][c]&&y+r>=0)grid[y+r][x+c]=cur[r][c];}
-function piece(){const i=Math.random()*SHAPES.length|0;
-cur=SHAPES[i].map(r=>r.map(v=>v?i+1:0)); x=W/2- (cur[0].length/2|0); y=-2;
-if(collide()) {over=true; paused=true;}
+function beep(freq=720, dur=0.08, gain=0.06){
+if(LS.sound!=='on') return;
+ensureAudio();
+const t = audioCtx.currentTime;
+const o = audioCtx.createOscillator();
+const g = audioCtx.createGain();
+o.type='triangle'; o.frequency.value=freq;
+g.gain.setValueAtTime(gain, t);
+g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+o.connect(g).connect(audioCtx.destination);
+o.start(t); o.stop(t+dur);
 }
-function lineClear(){
-let k=0;
-for(let r=H-1;r>=0;r--){
-if(grid[r].every(v=>v)){grid.splice(r,1);grid.unshift(Array(W).fill(0));k++;r++}
+let bgNode=null, bgGain=null;
+function startBG(){
+if(LS.sound!=='on') return;
+ensureAudio();
+if(bgNode) return;
+const now = audioCtx.currentTime;
+const o1 = audioCtx.createOscillator();
+const o2 = audioCtx.createOscillator();
+const g = audioCtx.createGain();
+g.gain.value = 0.05;
+o1.type='sine'; o1.frequency.value=84;
+o2.type='sine'; o2.frequency.value=127;
+o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+o1.start(now); o2.start(now);
+bgNode = [o1,o2]; bgGain=g;
 }
-if(k){score+= [0,40,100,300,1200][k]*(level); if(score>level*500){level++;}}
+function stopBG(){
+if(!bgNode) return;
+const now = audioCtx.currentTime;
+bgGain.gain.exponentialRampToValueAtTime(0.0001, now+0.2);
+setTimeout(()=>{ bgNode.forEach(n=>n.stop()); bgNode=null; }, 220);
 }
-function draw(){
-g.clearRect(0,0,cv.width,cv.height);
-function cell(X,Y,v){g.fillStyle=v?COLORS[v-1]:'#0e2a72'; g.fillRect(X*S,Y*S,S-1,S-1)}
-for(let r=0;r<H;r++)for(let c=0;c<W;c++) if(grid[r][c])cell(c,r,grid[r][c]);
-if(!over) for(let r=0;r<cur.length;r++)for(let c=0;c<cur[0].length;c++)
-if(cur[r][c]&&y+r>=0)cell(x+c,y+r,cur[r][c]);
-document.getElementById('score').textContent=score;
-document.getElementById('lvl').textContent=level;
+
+/* ---------- Cosmic starfield particles (background) ---------- */
+const stars = Array.from({length:180}, ()=>({
+x: Math.random()*W, y: Math.random()*H,
+s: Math.random()*1.6 + .2, v: Math.random()*0.15 + 0.02
+}));
+function drawStars(dt){
+ctx.save();
+ctx.globalAlpha = .9;
+ctx.fillStyle = '#010915';
+ctx.fillRect(0,0,W,H);
+// parallax trail
+ctx.globalAlpha = .28;
+ctx.fillStyle = '#0bf8';
+for(const st of stars){
+ctx.fillRect(st.x, st.y, st.s, st.s);
+st.x -= st.v*dt*0.06; st.y += st.v*dt*0.03;
+if(st.x<-2) st.x=W+2;
+if(st.y>H+2) st.y=-2;
 }
-function step(ts){
-if(paused||over){draw(); return requestAnimationFrame(step)}
-if(ts-dropI>Math.max(60,600-50*level)){
-dropI=ts; if(!collide(x,y+1)){y++;} else {merge(); lineClear(); piece();}
+ctx.restore();
 }
-draw(); requestAnimationFrame(step);
+
+/* ---------- Game state ---------- */
+const COLORS = ['#00f5ff','#00ffa8','#ffd166','#ff6b6b','#c77dff','#6ee7ff'];
+let running=false, paused=false;
+let score=0, level=1, elapsed=0, sides=LS.sides;
+let rotation=0; // manual only
+let sector=2*Math.PI/sides;
+let coreR= Math.min(W,H)*0.11; // base radius of polygon
+let lockR= coreR + 12; // where the first bar locks
+const BAR_THICK = 14; // radial height of a bar
+const BAR_LEN_FACTOR = 0.54; // relative length along edge
+let fallSpeedBase = 250; // px/sec (radial)
+let speedMul = 1; // diff+level
+let stacks = []; // array per side: [{color}, ...] 0 = closest
+let falling = null; // current falling bar
+let last = performance.now();
+let timeTicker=0;
+
+/* difficulty map */
+const DIFF = { easy:.9, medium:1, hard:1.16, insane:1.34 };
+
+/* ---------- Helpers ---------- */
+function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+function normAngle(a){ a%=Math.PI*2; return (a<0?a+Math.PI*2:a); }
+
+/* ---------- Geometry ---------- */
+function recomputeGeom(){
+sector = 2*Math.PI/sides;
+coreR = Math.min(W,H)*0.11;
+lockR = coreR + 12;
 }
-function left(){ if(!collide(x-1))x-- }
-function right(){ if(!collide(x+1))x++ }
-function down(){ if(!collide(x,y+1))y++ }
-function rotate(){ const r=rot(cur); if(!collide(x,y,r))cur=r }
-document.getElementById('left').onclick=left;
-document.getElementById('right').onclick=right;
-document.getElementById('down').onclick=down;
-document.getElementById('rot').onclick=rotate;
-addEventListener('keydown',e=>{
-if(e.key==='ArrowLeft')left();
-else if(e.key==='ArrowRight')right();
-else if(e.key==='ArrowDown')down();
-else if(e.key==='ArrowUp' || e.key===' ')rotate();
+function sideIndexForAngle(worldAngle){
+// Map a world angle (falling bar direction) into polygon's local frame
+const rel = normAngle(worldAngle - rotation);
+// side centers are every sector; align side 0 center at 0 radians
+let idx = Math.round(rel / sector) % sides;
+return idx;
+}
+
+/* ---------- Bars ---------- */
+function newFalling(){
+// Spawn at fixed world angle: from top (270°/-90°) straight to center
+const angle = -Math.PI/2;
+const color = COLORS[(Math.random()*COLORS.length)|0];
+// Start from far orbit and move inward
+const startR = Math.max(W,H)*0.55;
+return { angle, color, r: startR, alive:true, targetSide: null };
+}
+
+function lockBarToSide(bar){
+const idx = sideIndexForAngle(bar.angle);
+bar.targetSide = idx;
+if(!stacks[idx]) stacks[idx]=[];
+stacks[idx].unshift({color:bar.color}); // nearest to core at index 0
+beep(920, .06, .05);
+spawnBurst(idx, 0); // tiny anchor spark
+// check matches on that side
+checkMatchesOnSide(idx);
+// level up pacing
+const nextLevelAt = 60 + level*40;
+if(score >= nextLevelAt){ level++; speedMul*=1.06; flashLevelUp(); }
+// lose condition (overflow)
+const maxLayers = Math.floor((Math.min(W,H)*0.42 - lockR)/BAR_THICK) - 1;
+if(stacks[idx].length > maxLayers) gameOver();
+}
+
+function checkMatchesOnSide(idx){
+const arr = stacks[idx];
+if(!arr || arr.length<3) return;
+// contiguous groups anywhere in this side
+let i=0, cleared=0;
+while(i < arr.length){
+let j=i+1;
+while(j<arr.length && arr[j].color===arr[i].color) j++;
+const len=j-i;
+if(len>=3){
+// remove and add score; more reward for bigger chains
+arr.splice(i,len);
+cleared+=len;
+score += 10*len + (len>=4? len*4 : 0);
+elScore.textContent = score;
+// fx + sound
+popAtSide(idx, i, len);
+beep(560, .07, .06);
+beep(840, .06, .05);
+// do not advance i (collapse)
+continue;
+}
+i=j;
+}
+}
+
+/* ---------- Particles ---------- */
+const particles=[];
+function spawnBurst(sideIdx, layer, amount=10, strong=false){
+const baseA = sideIdx*sector + rotation;
+const baseR = lockR + layer*BAR_THICK + BAR_THICK*.5;
+for(let i=0;i<amount;i++){
+const ang = baseA + (Math.random()-.5)*0.6;
+const spd = strong? (Math.random()*180+140) : (Math.random()*120+60);
+const life = Math.random()*500+350;
+particles.push({
+x: CX + Math.cos(baseA)*baseR,
+y: CY + Math.sin(baseA)*baseR,
+vx: Math.cos(ang)*spd*0.008,
+vy: Math.sin(ang)*spd*0.008,
+life, color: COLORS[(Math.random()*COLORS.length)|0]
 });
-document.getElementById('start').onclick=()=>{paused=false};
-document.getElementById('pause').onclick=()=>{paused=!paused};
-document.getElementById('restart').onclick=()=>{score=0;level=1;over=false;paused=false;empty();piece()};
-empty();piece();requestAnimationFrame(step);
-</script><div style="position:fixed;top:20px;right:20px;z-index:9999;">
-  <a href="https://badoujr01.github.io/arcade-cloud-games/"
-     style="background:#0D47A1;color:white;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold;box-shadow:0 4px 8px rgba(0,0,0,0.3);transition:background 0.2s;"
-     onmouseover="this.style.background='#1565C0'"
-     onmouseout="this.style.background='#0D47A1'">
-    ← Back to voltXplay
-  </a>
-</div></body></html>
+}
+}
+function popAtSide(sideIdx, startLayer, len){
+spawnBurst(sideIdx, startLayer + Math.floor(len/2), 22, true);
+}
+
+function updateParticles(dt){
+for(let i=particles.length-1;i>=0;i--){
+const p=particles[i];
+p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt;
+p.vx*=0.996; p.vy*=0.996;
+if(p.life<=0) particles.splice(i,1);
+}
+}
+function drawParticles(){
+for(const p of particles){
+const a = clamp(p.life/700, 0, 1);
+ctx.globalAlpha = a;
+ctx.fillStyle = p.color;
+ctx.fillRect(p.x, p.y, 2.2, 2.2);
+}
+ctx.globalAlpha = 1;
+}
+
+/* ---------- Rendering ---------- */
+function drawPolygon(){
+// Outer glowing polygon core
+const r = coreR;
+const glow = ctx.createRadialGradient(CX, CY, r*0.4, CX, CY, r*1.2);
+glow.addColorStop(0,'rgba(0,245,255,0.18)');
+glow.addColorStop(1,'rgba(0,245,255,0)');
+ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(CX,CY,r*1.25,0,Math.PI*2); ctx.fill();
+
+// Core outline
+ctx.save();
+ctx.translate(CX,CY); ctx.rotate(rotation);
+ctx.lineWidth = 3;
+const col = `hsl(${(level*37)%360} 90% 60%)`;
+ctx.strokeStyle = col;
+ctx.shadowColor = col; ctx.shadowBlur = 16;
+
+ctx.beginPath();
+for(let i=0;i<sides;i++){
+const a = i*sector;
+const x = Math.cos(a)*r, y=Math.sin(a)*r;
+(i?ctx.lineTo:ctx.moveTo).call(ctx,x,y);
+}
+ctx.closePath(); ctx.stroke();
+
+// draw stacks (bars) on each side
+for(let i=0;i<sides;i++){
+const a = i*sector; // side normal direction
+const arr = stacks[i] || [];
+for(let layer=0; layer<arr.length; layer++){
+drawBar(a, layer, arr[layer].color);
+}
+}
+ctx.restore();
+}
+
+function drawBar(sideAngle, layer, color){
+// Oriented rectangle: length along tangent of the side, thickness radially outward
+const rCenter = lockR + layer*BAR_THICK + BAR_THICK/2;
+const len = (2*coreR*Math.tan(sector/2))*BAR_LEN_FACTOR; // portion of side length
+const w = len, h = BAR_THICK-2;
+const tang = sideAngle + Math.PI/2; // tangent direction
+ctx.save();
+// convert to world coords
+const x = Math.cos(sideAngle)*rCenter, y = Math.sin(sideAngle)*rCenter;
+ctx.translate(x, y); ctx.rotate(tang);
+// rounded rect
+ctx.fillStyle = color;
+ctx.strokeStyle = 'rgba(255,255,255,.15)';
+const rad = 5;
+roundRect(-w/2, -h/2, w, h, rad);
+ctx.fill(); ctx.stroke();
+// subtle inner gloss
+const g = ctx.createLinearGradient(-w/2,0,w/2,0);
+g.addColorStop(0,'rgba(255,255,255,.08)');
+g.addColorStop(0.5,'rgba(255,255,255,.18)');
+g.addColorStop(1,'rgba(255,255,255,.08)');
+ctx.globalCompositeOperation='overlay';
+ctx.fillStyle = g; roundRect(-w/2, -h/2, w, h, rad); ctx.fill();
+ctx.globalCompositeOperation='source-over';
+ctx.restore();
+}
+
+function roundRect(x,y,w,h,r){
+r = Math.min(r, w/2, h/2);
+ctx.beginPath();
+ctx.moveTo(x+r, y);
+ctx.arcTo(x+w, y, x+w, y+h, r);
+ctx.arcTo(x+w, y+h, x, y+h, r);
+ctx.arcTo(x, y+h, x, y, r);
+ctx.arcTo(x, y, x+w, y, r);
+ctx.closePath();
+}
+
+function drawFalling(){
+if(!falling) return;
+const sideIdx = sideIndexForAngle(falling.angle);
+const sideA = sideIdx*sector + rotation;
+// draw the bar at falling radius using the side's orientation (horizontal along edge)
+ctx.save(); ctx.translate(CX,CY);
+// bar center in world coordinates at radius falling.r along the side normal direction
+const x = Math.cos(sideA)*falling.r, y = Math.sin(sideA)*falling.r;
+ctx.translate(x,y);
+ctx.rotate(sideA + Math.PI/2); // orient tangent (horizontal)
+const len = (2*coreR*Math.tan(sector/2))*BAR_LEN_FACTOR;
+const h = BAR_THICK-2, w=len;
+ctx.fillStyle = falling.color; roundRect(-w/2, -h/2, w, h, 5); ctx.fill();
+ctx.restore();
+}
+
+/* ---------- Game flow ---------- */
+function resetGame(){
+stacks = Array.from({length:sides}, ()=>[]);
+score=0; level=1; elapsed=0; rotation=0; speedMul=DIFF[LS.diff] || 1;
+falling = null; particles.length=0;
+elScore.textContent=0; elLevel.textContent=1; elTime.textContent=0;
+}
+
+function spawn(){
+if(!falling) falling = newFalling();
+}
+
+function update(dt){
+if(!running || paused) return;
+
+elapsed += dt; timeTicker+=dt;
+if(timeTicker>1000){ elTime.textContent = Math.floor(elapsed/1000); timeTicker=0; }
+
+// advance falling bar
+spawn();
+if(falling){
+const speed = (fallSpeedBase + level*18) * speedMul; // px/sec
+falling.r -= speed*(dt/1000);
+// locking threshold (first layer)
+const targetSide = sideIndexForAngle(falling.angle);
+const layer = (stacks[targetSide]||[]).length;
+const stopR = lockR + layer*BAR_THICK + BAR_THICK/2;
+if(falling.r <= stopR){
+lockBarToSide(falling);
+falling = null;
+// raise high score
+if(score>LS.hi){ LS.hi=score; localStorage.setItem('vx_hextris_hi', String(LS.hi)); elHi.textContent=LS.hi; }
+}
+}
+}
+
+function draw(dt){
+drawStars(dt); // background
+ctx.save();
+// translate to center
+ctx.translate(CX,CY); ctx.rotate(0); ctx.translate(-CX,-CY);
+// polygon, stacks, falling, particles
+ctx.translate(CX,CY); ctx.rotate(rotation); ctx.translate(-CX,-CY);
+ctx.translate(CX,CY); ctx.rotate(-rotation); ctx.translate(-CX,-CY);
+ctx.restore();
+// Core & stacks (handles own rotation internally)
+ctx.save(); ctx.translate(CX,CY); ctx.rotate(rotation); ctx.translate(-CX,-CY);
+drawPolygon();
+ctx.restore();
+// Falling bar uses world coords but oriented to side
+ctx.save();
+ctx.translate(CX,CY); ctx.rotate(0); ctx.translate(-CX,-CY);
+drawFalling();
+ctx.restore();
+// Particles on top
+drawParticles();
+}
+
+function loop(t){
+const dt = Math.min(32, t-last); last=t;
+if(running && !paused){ update(dt); }
+updateParticles(dt);
+draw(dt);
+requestAnimationFrame(loop);
+}
+
+/* ---------- Level up flash ---------- */
+let levelFlash=0;
+function flashLevelUp(){
+levelFlash=300;
+elLevel.textContent = level;
+}
+function drawLevelFlash(dt){
+if(levelFlash<=0) return;
+levelFlash-=dt;
+}
+
+/* ---------- Game over ---------- */
+let lost=false;
+function gameOver(){
+running=false; lost=true; falling=null; stopBG();
+// little burst at every side top to dramatize
+for(let i=0;i<sides;i++) spawnBurst(i, (stacks[i]||[]).length-1, 18, true);
+setTimeout(()=>alert('Game Over! Score: '+score), 50);
+}
+
+/* ---------- Input ---------- */
+function rotLeft(){ rotation -= 0.12; }
+function rotRight(){ rotation += 0.12; }
+leftBtn.onclick = rotLeft; rightBtn.onclick = rotRight;
+addEventListener('keydown', e=>{
+if(e.key==='ArrowLeft') rotLeft();
+else if(e.key==='ArrowRight') rotRight();
+else if(e.key===' '){ e.preventDefault(); paused?resume():pause(); }
+},{passive:false});
+
+/* ---------- Buttons ---------- */
+startBtn.onclick = start;
+pauseBtn.onclick = pause;
+resumeBtn.onclick = resume;
+restartBtn.onclick = ()=>{ stopBG(); start(); };
+
+settingsBtn.onclick = ()=>{ settingsPanel.style.display='grid'; };
+closeSettings.onclick = ()=>{
+settingsPanel.style.display='none';
+// apply settings immediately if shape/diff changed
+const newSides = +shapeSel.value;
+if(newSides!==sides){
+sides=newSides; localStorage.setItem('vx_hextris_sides', String(sides));
+recomputeGeom(); resetGame();
+}
+const newDiff = diffSel.value;
+if(newDiff!==LS.diff){ LS.diff=newDiff; localStorage.setItem('vx_hextris_diff', LS.diff); resetGame(); }
+const newSound = soundSel.value;
+if(newSound!==LS.sound){
+LS.sound = newSound; localStorage.setItem('vx_hextris_sound', LS.sound);
+if(LS.sound!=='on') stopBG(); else if(running && !paused) startBG();
+}
+};
+
+resetHi.onclick = ()=>{
+LS.hi=0; localStorage.setItem('vx_hextris_hi','0'); elHi.textContent='0';
+};
+
+function start(){
+running=true; paused=false; lost=false;
+recomputeGeom(); resetGame(); startBG();
+}
+function pause(){ if(!running||paused) return; paused=true; stopBG(); }
+function resume(){ if(!running||!paused) return; paused=false; startBG(); }
+
+/* ---------- Touch (virtual buttons already present) ---------- */
+leftBtn.addEventListener('touchstart', e=>{e.preventDefault(); rotLeft();});
+rightBtn.addEventListener('touchstart', e=>{e.preventDefault(); rotRight();});
+
+/* ---------- Kick off ---------- */
+requestAnimationFrame(loop);
+
+/* ---------- Extra polish: faint safe ring + HUD sync in draw() ---------- */
+(function augmentDraw(){
+const _draw = draw;
+draw = function(dt){
+_draw(dt);
+// faint safe ring
+ctx.save();
+ctx.strokeStyle='rgba(0,245,255,.18)'; ctx.lineWidth=1.5;
+ctx.setLineDash([4,6]);
+ctx.beginPath(); ctx.arc(CX,CY, lockR-6, 0, Math.PI*2); ctx.stroke();
+ctx.setLineDash([]);
+ctx.restore();
+drawLevelFlash(dt);
+}
+})();
+
+/* ---------- Utility: keep HUD fresh ---------- */
+setInterval(()=>{
+elScore.textContent=score;
+elLevel.textContent=level;
+elHi.textContent=LS.hi;
+}, 200);
+
+/* ---------- Notes ----------
+- Manual rotation only (as requested).
+- Bars are horizontal rectangles oriented along polygon edges.
+- Side count selectable: 5..10.
+- Match-3 contiguous per side clears with particles + score.
+- Difficulty boosts radial speed; level-ups add slight multiplier.
+- High score, sound, difficulty, shape persist via localStorage.
+--------------------------------*/
+</script>
+</body>
+</html>
+
